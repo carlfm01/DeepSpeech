@@ -34,7 +34,7 @@
 
 source ../tmp/venv/bin/activate
 
-scratch=0
+# if num_layers_dropped=6, then we train from scratch (you dropped all the layers!)
 num_layers_dropped=5
 
 target_lang='tr'
@@ -55,7 +55,7 @@ python3 util/check_characters.py "${data}/*.csv"
 ###                      ###
 
 
-if [ $scratch -eq 0 ]; then
+if [ $num_layers_dropped -lt 6 ]; then
     
     exp="../keep/${target_lang}/${source_model}/${num_layers_dropped}"
     
@@ -91,7 +91,7 @@ fi
 
 
 
-if [ $scratch -eq 1 ]; then
+if [ $num_layers_dropped -eq 6 ]; then
     
     exp="../keep/${target_lang}/scratch/"
     
