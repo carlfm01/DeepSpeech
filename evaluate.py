@@ -181,8 +181,8 @@ def evaluate(test_data, inference_graph, alphabet):
 
         ground_truths.extend(alphabet.decode(l) for l in batch['transcript'])
         predictions.extend(d[0][1] for d in decoded)
-        ## PRINT DECODED OUTPUT TO STDOUT ##
-        print(decoded)
+        # ## PRINT DECODED OUTPUT TO STDOUT ##
+        # print(decoded)
 
     distances = [levenshtein(a, b) for a, b in zip(ground_truths, predictions)]
 

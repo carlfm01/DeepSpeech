@@ -38,7 +38,7 @@ source ../tmp/venv/bin/activate
 num_layers_dropped=5
 
 target_lang='cv'
-source_model='en'
+source_model='en-v030'
 input_dir="/snakepit/shared/data/mozilla/CommonVoice/v2.0-alpha1.0"
 #input_dir="/home/josh/Downloads/CV"
 data="../keep/${target_lang}"
