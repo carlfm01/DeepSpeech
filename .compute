@@ -37,13 +37,12 @@ source ../tmp/venv/bin/activate
 scratch=1
 num_layers_dropped=0
 
-target_lang='tt'
+target_lang='br'
 source_model='en'
 input_dir="/snakepit/shared/data/mozilla/CommonVoice/v2.0-alpha1.0"
 #input_dir="/home/josh/Downloads/CV"
 data="../keep/${target_lang}"
 mkdir $data
-
 
 
 python3 filter_train_dev_test.py "${input_dir}" "${target_lang}" "${input_dir}/clips.tsv" "${data}"
