@@ -34,24 +34,19 @@
 
 source ../tmp/venv/bin/activate
 
-scratch=0
+# if num_layers_dropped=6, then we train from scratch (you dropped all the layers!)
 num_layers_dropped=5
 
-
-
-target_lang='ca'
-source_model='en'
+target_lang='de'
+source_model='en-v030'
 input_dir="/snakepit/shared/data/mozilla/CommonVoice/v2.0-alpha1.0"
 #input_dir="/home/josh/Downloads/CV"
 data="../keep/${target_lang}"
 mkdir $data
 
 
-
 python3 filter_train_dev_test.py "${input_dir}" "${target_lang}" "${input_dir}/clips.tsv" "${data}"
 python3 util/check_characters.py "${data}/*.csv"
-
-
 
 
 ###                      ###
@@ -59,7 +54,7 @@ python3 util/check_characters.py "${data}/*.csv"
 ###                      ###
 
 
-if [ $scratch -eq 0 ]; then
+if [ $num_layers_dropped -lt 6 ]; then
     
     exp="../keep/${target_lang}/${source_model}/${num_layers_dropped}"
     
@@ -95,7 +90,7 @@ fi
 
 
 
-if [ $scratch -eq 1 ]; then
+if [ $num_layers_dropped -eq 6 ]; then
     
     exp="../keep/${target_lang}/scratch/"
     
