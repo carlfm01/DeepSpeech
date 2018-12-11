@@ -34,9 +34,15 @@ allText = set()
 for inFile in (inFiles):
     with open(inFile, 'r') as csvFile:
         reader = csv.reader(csvFile)
-        for row in reader:
-            allText |= set(str(row[2]))
-    csvFile.close()
+
+        try:
+            for row in reader:
+                allText |= set(str(row[2]))
+        except IndexError as ie:
+            print("Your input file",inFile,"is not formatted properly. Check if there are 3 columns with the 3rd containing the transcript")
+            sys.exit(-1)
+        finally:
+            csvFile.close()
 
 print("### The following unique characters were found in your transcripts: ###")
 print(list(allText))
