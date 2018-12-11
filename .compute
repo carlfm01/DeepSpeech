@@ -35,7 +35,7 @@
 source ../tmp/venv/bin/activate
 
 # if num_layers_dropped=6, then we train from scratch (you dropped all the layers!)
-num_layers_dropped=5
+num_layers_dropped=3
 
 target_lang='fr'
 source_model='en-v030'
@@ -65,8 +65,8 @@ if [ $num_layers_dropped -lt 6 ]; then
 	    --test_output_file "${exp}/RESULTS.json" \
 	    --drop_source_layers "${num_layers_dropped}" \
 	    --source_model_checkpoint_dir "../keep/${source_model}" \
-	    --train_files "${data}/valid_dev.csv"\
-	    --dev_files "${data}/valid_train.csv" \
+	    --train_files "${data}/valid_train.csv"\
+	    --dev_files "${data}/valid_dev.csv" \
 	    --test_files "${data}/valid_test.csv" \
 	    --n_hidden 2048 \
 	    --epoch -1000 \
