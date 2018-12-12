@@ -62,6 +62,7 @@ print("### Total valid+invalid clips per lang ###")
 print(clips['locale'].value_counts())
 print("############################")
 
+
 # pull out data for just one language
 locale = clips[clips['locale'] == LOCALE]
 
@@ -85,7 +86,7 @@ def bucket(row):
 speaker_counts.loc[:, 'new_bucket'] = speaker_counts.apply(bucket, axis = 1)
 locale['new_bucket']=locale['ID'].map(speaker_counts.set_index('ID')['new_bucket'])
 ### REASSIGN TEXT / DEV / TRAIN ###
-print(locale.head())
+
 
 
 locale['path'] = locale['path'].str.replace('/', '___')
@@ -148,4 +149,3 @@ print("###############################################")
 validated_clips[dev_indices].to_csv(os.path.join(output_folder, 'valid_dev.csv'), index=False)
 validated_clips[test_indices].to_csv(os.path.join(output_folder, 'valid_test.csv'), index=False)
 validated_clips[train_indices].to_csv(os.path.join(output_folder, 'valid_train.csv'), index=False)
-

@@ -21,6 +21,7 @@
 #include "ctcdecode/ctc_beam_search_decoder.h"
 
 //TODO: infer batch size from model/use dynamic batch size
+
 constexpr unsigned int BATCH_SIZE = 1;
 
 //TODO: use dynamic sample rate
@@ -226,6 +227,7 @@ StreamingState::finishStream()
 void
 StreamingState::processAudioWindow(const vector<float>& buf)
 {
+
   // Compute MFCC features
   float* mfcc;
   int n_frames = csf_mfcc(buf.data(), buf.size(), SAMPLE_RATE,
@@ -524,6 +526,7 @@ DS_SetupStream(ModelState* aCtx,
   ctx->mfcc_buffer.reserve(aCtx->mfcc_feats_per_timestep);
   ctx->mfcc_buffer.resize(MFCC_FEATURES*aCtx->n_context, 0.f);
   ctx->batch_buffer.reserve(aCtx->n_steps * aCtx->mfcc_feats_per_timestep);
+
 
   ctx->model = aCtx;
 
