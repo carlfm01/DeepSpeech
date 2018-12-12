@@ -60,6 +60,7 @@ if [ $num_layers_dropped -lt 6 ]; then
 
     exp="../keep/${target_lang}/${source_model}/${num_layers_dropped}"
     
+
     python3 -u DeepSpeech.py \
 	    --export_dir "${exp}/model/" \
 	    --summary_dir "${exp}/summaries/" \
@@ -86,9 +87,11 @@ fi
 
 
 
+
 ###              ###
 ### FROM SCRATCH ###
 ###              ###
+
 
 
 
