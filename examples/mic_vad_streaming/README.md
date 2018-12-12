@@ -14,13 +14,11 @@ Uses portaudio for microphone access, so on Linux, you may need to install its h
 sudo apt install portaudio19-dev
 ```
 
-
 Installation on MacOS may fail due to portaudio, use brew to install it:
 
 ```bash
 brew install portaudio
 ```
-
 
 ## Usage
 

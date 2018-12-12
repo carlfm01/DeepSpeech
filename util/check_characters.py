@@ -29,12 +29,10 @@ else:
 print("### Reading in the following transcript files: ###")
 print(inFiles)
 
-
 allText = set()
 for inFile in (inFiles):
     with open(inFile, 'r') as csvFile:
         reader = csv.reader(csvFile)
-
         try:
             for row in reader:
                 allText |= set(str(row[2]))

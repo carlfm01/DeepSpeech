@@ -34,10 +34,10 @@
 
 source ../tmp/venv/bin/activate
 
-# if num_layers_dropped=6, then we train from scratch (you dropped all the layers!)
+# train from scratch with num_layers_dropped=6
 num_layers_dropped=6
 
-target_lang='fr'
+target_lang='LANG'
 source_model='en-v030'
 
 
@@ -49,7 +49,6 @@ mkdir $data
 
 python3 filter_train_dev_test.py "${input_dir}" "${target_lang}" "${input_dir}/clips.tsv" "${data}"
 python3 util/check_characters.py "${data}/*.csv"
-
 
 
 ###                      ###
