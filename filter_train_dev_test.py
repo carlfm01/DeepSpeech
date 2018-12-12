@@ -2,6 +2,7 @@ import pandas
 import sys
 import os
 import ntpath
+import glob
 
 '''
 USAGE:  $ python3 filter_cv1_dev_test.py DATA_DIR LOCALE CLIPS.TSV SAVE_TO_DIR
@@ -74,15 +75,6 @@ speaker_counts.columns= ['ID', 'counts']
 speaker_counts['cum_sum'] = speaker_counts.counts.cumsum()
 speaker_counts['cum_perc'] = 100 * speaker_counts.cum_sum / speaker_counts.counts.sum()
 
-### BIG LANGS ###
-# num_spks = len(speaker_counts.index)
-# train = ['train']*8
-# dev = ['dev']*1
-# test = ['test']*1
-# splits = train + dev + test
-# speaker_counts['new_bucket'] = pandas.Series((splits*num_spks)[:num_spks]).values
-##^ BIG LANGS ^##
-
 ### LIL LANGS ###
 def bucket(row):
     if (row.cum_perc > 0.0) and( row.cum_perc < 80.0) :
@@ -93,7 +85,6 @@ def bucket(row):
         return "test"
 speaker_counts.loc[:, 'new_bucket'] = speaker_counts.apply(bucket, axis = 1)
 ##^ LIL LANGS ^##
-# speaker_counts.to_csv("speaker_count.csv", sep="\t")
 
 
 locale['new_bucket']=locale['ID'].map(speaker_counts.set_index('ID')['new_bucket'])
@@ -113,7 +104,13 @@ train_paths = locale[locale['new_bucket'] == 'train'].loc[:, ['path']]
 
 # cv_LANG_valid.csv == wav_filename,wav_filesize,transcript
 
-validated_clips = pandas.read_csv('{}/{}/cv_{}_valid.csv'.format(data_dir, LOCALE, LOCALE))
+### don't use splits on cluster quite yet ###
+all_files = glob.glob(os.path.join(data_dir, LOCALE, "*_valid_*.csv"))
+df_from_each_file = (pandas.read_csv(f) for f in all_files)
+validated_clips   = pandas.concat(df_from_each_file, ignore_index=True)
+# validated_clips = pandas.read_csv('{}/{}/cv_{}_valid.csv'.format(data_dir, LOCALE, LOCALE))
+### don't use splits on cluster quite yet ###
+
 validated_clips['path'] = validated_clips['wav_filename'].apply(ntpath.basename)
 validated_clips['transcript'] =  validated_clips['transcript'].str.replace(u'\xa0', ' ') # kyrgyz
 validated_clips['transcript'] =  validated_clips['transcript'].str.replace(u'\xad', ' ') # catalan
