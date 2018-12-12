@@ -85,6 +85,7 @@ def bucket(row):
 speaker_counts.loc[:, 'new_bucket'] = speaker_counts.apply(bucket, axis = 1)
 locale['new_bucket']=locale['ID'].map(speaker_counts.set_index('ID')['new_bucket'])
 ### REASSIGN TEXT / DEV / TRAIN ###
+print(locale.head())
 
 
 locale['path'] = locale['path'].str.replace('/', '___')
@@ -102,10 +103,12 @@ train_paths = locale[locale['new_bucket'] == 'train'].loc[:, ['path']]
 # cv_LANG_valid.csv == wav_filename,wav_filesize,transcript
 ### don't use splits on cluster quite yet ###
 all_files = glob.glob(os.path.join(data_dir, LOCALE, "*_valid_*.csv"))
+print((str(i) for i in all_files))
 df_from_each_file = (pandas.read_csv(f) for f in all_files)
 validated_clips   = pandas.concat(df_from_each_file, ignore_index=True)
 # validated_clips = pandas.read_csv('{}/{}/cv_{}_valid.csv'.format(data_dir, LOCALE, LOCALE))
 ### don't use splits on cluster quite yet ###
+print(validated_clips.head())
 
 # validated_clips = pandas.read_csv('{}/{}/cv_{}_valid.csv'.format(data_dir, LOCALE, LOCALE))
 validated_clips['path'] = validated_clips['wav_filename'].apply(ntpath.basename)
@@ -113,6 +116,7 @@ validated_clips['transcript'] =  validated_clips['transcript'].str.replace(u'\xa
 validated_clips['transcript'] =  validated_clips['transcript'].str.replace(u'\xad', ' ') # catalan
 validated_clips['transcript'] =  validated_clips['transcript'].str.replace(u'\\', ' ') # welsh
 
+print(validated_clips.head())
 
 
 ####              ####
@@ -123,10 +127,11 @@ validated_clips['transcript'] =  validated_clips['transcript'].str.replace(u'\\'
 dev_indices = validated_clips['path'].isin(dev_paths['path'])
 test_indices = validated_clips['path'].isin(test_paths['path'])
 train_indices = validated_clips['path'].isin(train_paths['path'])
+validated_clips['wav_filename'] =  data_dir + "/" + LOCALE + "/valid/" + validated_clips['path'].astype(str)
 validated_clips = validated_clips.drop(columns=['path'])
-validated_clips['wav_filename'] =  data_dir + "/" + LOCALE + "/" + validated_clips['wav_filename'].astype(str)
 
 
+print(validated_clips.head())
 
 
 ####              ####
