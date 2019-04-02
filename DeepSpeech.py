@@ -308,7 +308,7 @@ def get_tower_results(iterator, optimizer, dropout_rates, drop_source_layers):
                     # Retain tower's avg losses
                     tower_avg_losses.append(avg_loss)
 
-                                        # Compute gradients for model parameters using tower's mini-batch
+                    # Compute gradients for model parameters using tower's mini-batch
                     if FLAGS.load == "transfer" and not FLAGS.fine_tune:
                         # train from source model and freeze old layers
                         # aka - only update new layers
