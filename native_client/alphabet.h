@@ -16,25 +16,58 @@
 class Alphabet {
 public:
   Alphabet(const char *config_file) {
-    std::ifstream in(config_file, std::ios::in);
-    unsigned int label = 0;
-    space_label_ = -2;
-    for (std::string line; std::getline(in, line);) {
-      if (line.size() == 2 && line[0] == '\\' && line[1] == '#') {
-        line = '#';
-      } else if (line[0] == '#') {
-        continue;
-      }
+	unsigned int label = 0;
+    space_label_ = 0;
+    std::string letters[34] = {
+      " ",
+      "a",
+      "b",
+      "c",
+      "d",
+      "e",
+      "f",
+      "g",
+      "h",
+      "i",
+      "j",
+      "k",
+      "l",
+      "m",
+      "n",
+      "o",
+      "p",
+      "q",
+      "r",
+      "s",
+      "t",
+      "u",
+      "v",
+      "w",
+      "x",
+      "y",
+      "z",
+      "ü",
+      "á",
+      "é",
+      "í",
+      "ó",
+      "ú",
+      "ñ"};
+       
+    for(size_t i = 0; i < 34; i++)
+    {
+      std::string line = letters[i];
+       
       //TODO: we should probably do something more i18n-aware here
       if (line == " ") {
         space_label_ = label;
       }
+      std::cerr << "CHAR: " << line << std::endl;
       label_to_str_.push_back(line);
       str_to_label_[line] = label;
       ++label;
     }
     size_ = label;
-    in.close();
   }
 
   const std::string& StringFromLabel(unsigned int label) const {
