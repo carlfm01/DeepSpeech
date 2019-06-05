@@ -66,7 +66,6 @@ def calculate_report(wav_filenames, labels, decodings, losses):
     samples_wer, samples_cer = wer_cer_batch(samples)
 
     # Order the remaining items by their loss (lowest loss on top)
-    samples.sort(key=lambda s: s.loss)
 
     # Then order by descending WER/CER
     if FLAGS.utf8:
