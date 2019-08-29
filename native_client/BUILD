@@ -30,6 +30,8 @@ KENLM_INCLUDES = [
     "kenlm",
 ]
 
+LPCNET_SOURCES = glob(["lpcnet/*.c", "lpcnet/*.h"])
+
 OPENFST_SOURCES_PLATFORM = select({ 
         "//tensorflow:windows": glob(["ctcdecode/third_party/openfst-1.6.9-win/src/lib/*.cc"]),
         "//conditions:default": glob(["ctcdecode/third_party/openfst-1.6.7/src/lib/*.cc"]),
@@ -68,6 +70,7 @@ tf_cc_shared_object(
             "workspace_status.h",
             "workspace_status.cc"] +
             DECODER_SOURCES +
+            LPCNET_SOURCES +
             select({
                 "//native_client:tflite": [
                     "tflitemodelstate.h",
