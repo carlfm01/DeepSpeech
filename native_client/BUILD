@@ -30,7 +30,12 @@ KENLM_INCLUDES = [
     "kenlm",
 ]
 
-LPCNET_SOURCES = glob(["lpcnet/*.c", "lpcnet/*.h"])
+OPEN_CL_HEADERS = glob(["CL/*.h","CL/*.hh","CL/*.hpp"])
+OPEN_CL_SOURCES = glob(["CL/*.c","CL/*.cc"])
+
+LPCNET_SOURCES = glob(["oldlpcnet/*.c","oldlpcnet/*.cc", "oldlpcnet/*.h","oldlpcnet/*.hh"])
+LPCNET = glob(["oldlpcnet/*.c","oldlpcnet/*.cc"])
+LPCNET_INCLUDES = glob(["oldlpcnet/*.h","oldlpcnet/*.hh"])
 
 OPENFST_SOURCES_PLATFORM = select({ 
         "//tensorflow:windows": glob(["ctcdecode/third_party/openfst-1.6.9-win/src/lib/*.cc"]),
@@ -149,6 +154,26 @@ cc_binary(
     linkopts = ["-lm", "-ldl", "-pthread"],
     defines = ["KENLM_MAX_ORDER=6"],
 )
+
+cc_binary(
+    name = "lpcnet.dll",
+    srcs = LPCNET +OPEN_CL_SOURCES,
+    includes = LPCNET_INCLUDES+OPEN_CL_HEADERS,
+    copts = ["-std=c++11"],
+    linkopts = ["-lm", "-ldl", "-pthread"],
+    defines = ["KENLM_MAX_ORDER=6"],
+    linkshared = 1,
+    deps = [":cl"]
+)
+
+
+cc_library(
+    name = "cl",
+    srcs = ["lib/OpenCL.lib"],
+    hdrs = OPEN_CL_HEADERS
+)
+
+
 
 cc_binary(
     name = "trie_load",

@@ -10,7 +10,8 @@ using System.Linq;
 
 namespace CSharpExamples
 {
-    class Program
+   
+    public unsafe class Program
     {
         /// <summary>
         /// Get the value of an argurment.
@@ -40,6 +41,40 @@ namespace CSharpExamples
             string trie = null;
             string audio = null;
             bool extended = false;
+
+            //for (int i = 0; i < 500; i+=16)
+            //{
+            //    Console.WriteLine(i);
+            //}
+
+
+            //for (int i = 0; i <= 500/16;i++)
+            //{
+            //    int j = i * 16;
+            //    Console.WriteLine(j);
+            //}
+
+
+            // var resultFeatures = LpcNetNativeImp.encodepcm("out.pcm", "features.bin");
+            // var resultPcm = LpcNetNativeImp.decodepcm("features.bin", "out.f16");
+            //var resultPcm1 = LpcNetNativeImp.synthesize_features("compressed.f32", "sintt1.pcm");
+            //var resultPcm2 = LpcNetNativeImp.synthesize_features("compressed.f32", "sintt2.pcm");
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+            //var resultPcm3 = LpcNetNativeImp.synthesize_features("let.f32", "let.pcm",1);
+            LpcNetNativeImp.synthesize_features("f32_for_lpcnet.f32", "lelo.pcm", 1);
+            Console.WriteLine($"{sw.Elapsed}");
+            Console.ReadLine();
+            LpcNetNativeImp.synthesize_features("tuxlpc3.f32", "tuxlpc3.pcm", 1);
+            LpcNetNativeImp.synthesize_features("tuxlpc4.f32", "tuxlpc4.pcm", 1);
+            LpcNetNativeImp.synthesize_features("tuxlpc5.f32", "tuxlpc5.pcm", 1);
+            Console.ReadLine();
+
+            //var lpcnet = LpcNetNativeImp.lpcnet_create();
+            //var created = LpcNetNativeImp.lpcnet_init(lpcnet);
+            //var size = LpcNetNativeImp.lpcnet_get_size();
+            //var encoder = LpcNetNativeImp.lpcnet_encoder_create();
+            //var encoderInit = LpcNetNativeImp.lpcnet_encoder_init(encoder);
             if (args.Length > 0)
             {
                 model = GetArgument(args, "--model");
