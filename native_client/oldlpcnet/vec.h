@@ -26,7 +26,7 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 /* No AVX2/FMA support */
-#include "../CL/cl.h"
+//#include "../CL/cl.h"
 #include <stdio.h>
 #ifndef LPCNET_TEST
 
@@ -110,7 +110,7 @@ static void vec_sigmoid(float *y, const float *x, int N)
 #endif
 
 
-
+/*
 void run_gemm()
 {
    printf("Running OpenCL on ");
@@ -245,7 +245,7 @@ void run_gemm()
     free(h_b);
     free(h_c);
 }
-
+*/
 static void sgemv_accum16(float *out, const float *weights, int rows, int cols, int col_stride, const float *x)
 {
 

@@ -32,7 +32,7 @@
 #include "arch.h"
 #include "lpcnet.h"
 #include "freq.h"
-#include "../CL/cl.h"
+//#include "../CL/cl.h"
 
 #define LPC_ORDER 16
 #define PREEMPH 0.85f
@@ -163,7 +163,7 @@ const char *kernelSource =
     "      c[id] = a[id] + b[id];      "
     "}    ;";
 
-void print_devices()
+/*void print_devices()
 {
     int i, j;
     char *value;
@@ -174,7 +174,7 @@ void print_devices()
     cl_device_id *devices;
     cl_uint maxComputeUnits;
 
-    // get all platforms
+    
     clGetPlatformIDs(0, NULL, &platformCount);
     platforms = (cl_platform_id *)malloc(sizeof(cl_platform_id) * platformCount);
     clGetPlatformIDs(platformCount, platforms, NULL);
@@ -182,44 +182,43 @@ void print_devices()
     for (int i = 0; i < platformCount; i++)
     {
 
-        // get all devices
+        
         clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, 0, NULL, &deviceCount);
         devices = (cl_device_id *)malloc(sizeof(cl_device_id) * deviceCount);
         clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, deviceCount, devices, NULL);
 
-        // for each device print critical attributes
+       
         for (j = 0; j < deviceCount; j++)
         {
 
-            // print device name
+           
             clGetDeviceInfo(devices[j], CL_DEVICE_NAME, 0, NULL, &valueSize);
             value = (char *)malloc(valueSize);
             clGetDeviceInfo(devices[j], CL_DEVICE_NAME, valueSize, value, NULL);
             printf("%d. Device: %s\n", j + 1, value);
             free(value);
 
-            // print hardware device version
+            
             clGetDeviceInfo(devices[j], CL_DEVICE_VERSION, 0, NULL, &valueSize);
             value = (char *)malloc(valueSize);
             clGetDeviceInfo(devices[j], CL_DEVICE_VERSION, valueSize, value, NULL);
             printf(" %d.%d Hardware version: %s\n", j + 1, 1, value);
             free(value);
 
-            // print software driver version
+            
             clGetDeviceInfo(devices[j], CL_DRIVER_VERSION, 0, NULL, &valueSize);
             value = (char *)malloc(valueSize);
             clGetDeviceInfo(devices[j], CL_DRIVER_VERSION, valueSize, value, NULL);
             printf(" %d.%d Software version: %s\n", j + 1, 2, value);
             free(value);
 
-            // print c version supported by compiler for device
+        
             clGetDeviceInfo(devices[j], CL_DEVICE_OPENCL_C_VERSION, 0, NULL, &valueSize);
             value = (char *)malloc(valueSize);
             clGetDeviceInfo(devices[j], CL_DEVICE_OPENCL_C_VERSION, valueSize, value, NULL);
             printf(" %d.%d OpenCL C version: %s\n", j + 1, 3, value);
             free(value);
 
-            // print parallel compute units
             clGetDeviceInfo(devices[j], CL_DEVICE_MAX_COMPUTE_UNITS,
                             sizeof(maxComputeUnits), &maxComputeUnits, NULL);
             printf(" %d.%d Parallel compute units: %d\n", j + 1, 4, maxComputeUnits);
@@ -230,8 +229,9 @@ void print_devices()
 
     free(platforms);
 }
+*/
 
-static char *read_source_file(const char *filename)
+/*static char *read_source_file(const char *filename)
 {
     long int
         size = 0,
@@ -276,11 +276,13 @@ static char *read_source_file(const char *filename)
         return src;
     }
 
-    src[size] = '\0'; /* NULL terminated */
+    src[size] = '\0'; 
     fclose(file);
 
     return src;
-}
+}*/
+
+/*
 void excecute_open_cl()
 {
     FILE *programHandle;
@@ -395,10 +397,10 @@ void excecute_open_cl()
                         bytes, h_c, 0, NULL, NULL);
 
     //Sum up vector c and print result divided by n, this should equal 1 within error
-    /*double sum = 0;
+    double sum = 0;
     for(i=0; i<n; i++)
         sum += h_c[i];
-    printf("final result: %f\n", sum/n);*/
+    printf("final result: %f\n", sum/n);
 
     // release OpenCL resources
     clReleaseMemObject(d_a);
@@ -413,11 +415,11 @@ void excecute_open_cl()
     free(h_a);
     free(h_b);
     free(h_c);
-}
+}*/
 
 int synthesize_features(char *input, char *output, int use_taco)
 {
-    print_devices();
+    //print_devices();
     /*for (int i = 0; i < 90000000; i++)
     {
         excecute_open_cl();
