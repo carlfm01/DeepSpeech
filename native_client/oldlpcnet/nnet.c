@@ -39,7 +39,7 @@
 #include "nnet.h"
 #include "nnet_data.h"
 #include "stdint.h"
-#include "../CL/cl.h"
+//#include "../CL/cl.h"
 #include <stdio.h>
 #define SOFTMAX_HACK
 
@@ -50,7 +50,7 @@
 #else
 #include "vec.h"
 #endif
-void checkErrorCl_Status(cl_int error, int line)
+/*void checkErrorCl_Status(cl_int error, int line)
 {
 
    if (error != CL_SUCCESS)
@@ -254,13 +254,13 @@ void checkErrorCl_Status(cl_int error, int line)
          printf("-- Error at %d:  Unknown with code %d\n", line, error);
       }
    }
-}
+}*/
 static OPUS_INLINE float relu(float x)
 {
    return x < 0 ? 0 : x;
 }
 
-void printTest()
+/*void printTest()
 {
    const char *source =
        "__kernel void main(__global int2 *out) {\n"
@@ -295,7 +295,7 @@ void printTest()
    printf("3|%d\n", input[2]);
    printf("4|%d\n", input[3]);
 }
-
+*/
 static void sgemv_accum(float *out, const float *weights, int rows, int cols, int col_stride, const float *x)
 {
 
