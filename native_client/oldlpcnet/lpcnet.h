@@ -36,7 +36,7 @@
 #define LPCNET_EXPORT
 #endif
 #endif
-#include "../CL/cl.h"
+//#include "../CL/cl.h"
 #define NB_FEATURES 38
 #define NB_TOTAL_FEATURES 55
 
@@ -51,4 +51,10 @@ void lpcnet_synthesize(LPCNetState *lpcnet, short *output, const float *features
 LPCNET_EXPORT int synthesize_features(char *input, char *output, int use_taco);
 
 int factorial(int n);
+
+
+ void init_lpcnet();
+ void run_lpcnet(float *features, int features_size, void (*pcm_callback)(short *pcm, int pcm_size));
+ void cleanup();
+
 #endif
