@@ -50,13 +50,15 @@ namespace CSharpExamples
                 extended = !string.IsNullOrWhiteSpace(GetArgument(args, "--extended"));
             }
 
+            const uint N_CEP = 26;
+            const uint N_CONTEXT = 9;
             const uint BEAM_WIDTH = 500;
             const float LM_ALPHA = 0.75f;
             const float LM_BETA = 1.85f;
 
             Stopwatch stopwatch = new Stopwatch();
 
-            using (IDeepSpeech sttClient = new DeepSpeech())
+            using (DeepSpeech sttClient = new DeepSpeech())
             {
                 try
                 {
@@ -64,6 +66,7 @@ namespace CSharpExamples
                     stopwatch.Start();
                     sttClient.CreateModel(
                         model ?? "output_graph.pbmm",
+                        N_CEP,N_CONTEXT,
                         alphabet ?? "alphabet.txt",
                         BEAM_WIDTH);
                     stopwatch.Stop();
@@ -73,7 +76,7 @@ namespace CSharpExamples
                     if (lm != null)
                     {
                         Console.WriteLine("Loadin LM...");
-                        sttClient.EnableDecoderWithLM(
+                        sttClient.EnableDecoderWithLM("alphabet.txt",
                             lm ?? "lm.binary",
                             trie ?? "trie",
                             LM_ALPHA, LM_BETA);
