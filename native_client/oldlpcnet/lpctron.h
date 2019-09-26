@@ -9,9 +9,10 @@
 #else
 #define LPCTRON_EXPORT
 #endif
+
 #endif
 #include <iostream>
 
-void tts(std::string text);
+LPCTRON_EXPORT void tts(std::string text);
 
 #endif
