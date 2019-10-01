@@ -61,7 +61,7 @@ namespace CSharpExamples
             //var resultPcm2 = LpcNetNativeImp.synthesize_features("compressed.f32", "sintt2.pcm");
             Stopwatch sw = new Stopwatch();
             sw.Start();
-            LpcNetNativeImp.tts("hola mundo, como esta?");
+            LpcNetNativeImp.tts("hola mundo, como está?");
             //var resultPcm3 = LpcNetNativeImp.synthesize_features("let.f32", "let.pcm",1);
             LpcNetNativeImp.synthesize_features("f32_for_lpcnet.f32", "lelo.pcm", 1);
             Console.WriteLine($"{sw.Elapsed}");

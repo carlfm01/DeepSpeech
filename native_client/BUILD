@@ -135,6 +135,10 @@ tf_cc_shared_object(
             "//tensorflow/contrib/rnn:lstm_ops_kernels",    # BlockLSTM
             "//tensorflow/core/kernels:pack_op",            # Pack
             "//tensorflow/core/kernels:gather_nd_op",       # GatherNd
+            "//tensorflow/core/kernels:logging_ops",
+            "//tensorflow/core/kernels:tensor_array_ops",
+            "//tensorflow/core/kernels:dataset_ops",
+            "//tensorflow/core/kernels:random_ops",       # GatherNdtensorflow/core/kernels/random_op
         ],
     }) + if_cuda([
             "//tensorflow/core:core",
