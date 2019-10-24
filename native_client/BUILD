@@ -98,8 +98,6 @@ tf_cc_shared_object(
     linkopts = select({
         "//tensorflow:darwin": [],
         "//tensorflow:linux_x86_64": LINUX_LINKOPTS,
-        "//tensorflow:rpi3": LINUX_LINKOPTS + ["-l:libstdc++.a"],
-        "//tensorflow:rpi3-armv8": LINUX_LINKOPTS + ["-l:libstdc++.a"],
         "//tensorflow:windows": [],
         "//conditions:default": []
     }) + tflite_linkopts(),
@@ -139,6 +137,14 @@ tf_cc_shared_object(
             "//tensorflow/core/kernels:tensor_array_ops",
             "//tensorflow/core/kernels:dataset_ops",
             "//tensorflow/core/kernels:random_ops",       # GatherNdtensorflow/core/kernels/random_op
+            "//tensorflow/core:ops",
+            "//tensorflow/cc:array_ops",
+            "//tensorflow/core/kernels:gather_op",
+            "//tensorflow/core/kernels:split_op",
+            "//tensorflow/core/kernels:reverse_sequence_op",	#tensorflow/core/kernels/fifo_queue_op.cc			 tensorflow/core/ops/script_ops
+            "//tensorflow/core/kernels:fifo_queue_op",
+            "//tensorflow/core/kernels:queue_ops", #tensorflow/core/ops/script_ops tensorflow/core/ops/script_ops unary_ops_composition.cc
+            "//tensorflow/core/kernels:unary_ops_composition"
         ],
     }) + if_cuda([
             "//tensorflow/core:core",

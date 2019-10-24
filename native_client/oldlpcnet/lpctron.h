@@ -13,6 +13,7 @@
 #endif
 #include <iostream>
 
-LPCTRON_EXPORT void tts(std::string text);
+LPCTRON_EXPORT void tts(const char* input);
+LPCTRON_EXPORT void init(const char* modelpath);
 
 #endif

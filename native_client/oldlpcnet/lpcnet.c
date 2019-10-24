@@ -540,8 +540,10 @@ void cleanup() {
     lpcnet_destroy(net);
 }
 
-void run_lpcnet(float *features_taco, int num_features_taco, void (*pcm_callback)(short *pcm, int pcm_size)) {
+void run_lpcnet(float *features_taco, int num_features_taco) {
     int read_idx = 0;
+    FILE *pcm_file;
+    pcm_file = fopen("output.pcm", "wb");
     while (read_idx < num_features_taco) {
         float features[NB_FEATURES];
         short pcm[FRAME_SIZE];
@@ -551,8 +553,9 @@ void run_lpcnet(float *features_taco, int num_features_taco, void (*pcm_callback
         RNN_CLEAR(&features[18], 18);
         RNN_COPY(features+36, in_features+NB_BANDS, 2);
         lpcnet_synthesize(net, pcm, features, FRAME_SIZE);
-       
-        pcm_callback(pcm, FRAME_SIZE);
+        fwrite(pcm, sizeof(short), FRAME_SIZE, pcm_file);
+        //pcm_callback(pcm, FRAME_SIZE);
         read_idx += (NB_BANDS + 2);
     }
+    fclose(pcm_file);
 }

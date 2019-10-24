@@ -59,14 +59,29 @@ namespace CSharpExamples
             // var resultPcm = LpcNetNativeImp.decodepcm("features.bin", "out.f16");
             //var resultPcm1 = LpcNetNativeImp.synthesize_features("compressed.f32", "sintt1.pcm");
             //var resultPcm2 = LpcNetNativeImp.synthesize_features("compressed.f32", "sintt2.pcm");
+            LpcNetNativeImp.init("epachuko/inference_model.pbmm");
+            LpcNetNativeImp.tts("soy una voz artificial creada por carlos, me llamo yarvis y dominare el mundo.~");
+            // LpcNetNativeImp.tts("soy una voz artificial creada por carlos, me llamo yarvis y dominare el mundo.~");
+            File.Delete("output.pcm");
             Stopwatch sw = new Stopwatch();
             sw.Start();
-            LpcNetNativeImp.tts("hola mundo, como está?");
+            
+            LpcNetNativeImp.tts("soy una voz artificial creada por carlos, me llamo yarvis y dominare el mundo.~");
+            //LpcNetNativeImp.synthesize_features("inference_model_cpp.f32", "tt.pcm", 1);
+            Console.WriteLine("==============      COMPLETED       ===================");
+            
+            ConvertToWav(new FileInfo("output.pcm"));
+            //ConvertToWav(new FileInfo("tt.pcm"));
             //var resultPcm3 = LpcNetNativeImp.synthesize_features("let.f32", "let.pcm",1);
-            LpcNetNativeImp.synthesize_features("f32_for_lpcnet.f32", "lelo.pcm", 1);
+            //LpcNetNativeImp.synthesize_features("f32_for_lpcnet.f32", "lelo.pcm", 1);
             Console.WriteLine($"{sw.Elapsed}");
+            var rocessInfo = new ProcessStartInfo("output.wav");
+            Process process = new Process() { StartInfo = rocessInfo };
+            process.Start();
+           // WaveReader mp3Reader = new WavFileReader("example.mp3");
+            return;
             Console.ReadLine();
-            LpcNetNativeImp.synthesize_features("tuxlpc3.f32", "tuxlpc3.pcm", 1);
+
             LpcNetNativeImp.synthesize_features("tuxlpc4.f32", "tuxlpc4.pcm", 1);
             LpcNetNativeImp.synthesize_features("tuxlpc5.f32", "tuxlpc5.pcm", 1);
             Console.ReadLine();
@@ -151,6 +166,20 @@ namespace CSharpExamples
                 {
                     Console.WriteLine(ex.Message);
                 }
+            }
+        }
+
+        private static void ConvertToWav(FileInfo file)
+        {
+            using (var stream = file.Open(FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                var waveFormat = new WaveFormat(16000, 16, 1);
+                var rawSource = new RawSourceWaveStream(stream, waveFormat);
+                using (var fileWriter = new WaveFileWriter(file.Name.Replace(".pcm", ".wav"), waveFormat))
+                {
+                    rawSource.CopyTo(fileWriter);
+                }
+
             }
         }
     }

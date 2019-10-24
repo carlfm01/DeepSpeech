@@ -81,12 +81,13 @@ namespace DeepSpeechClient
         [DllImport(@"libdeepspeech.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "encodepcm")]
         public static extern unsafe int encodepcm(string input, string output);
 
-        [DllImport(@"C:/users/neoxz/_bazel_neoxz/i3e7wymj/execroot/org_tensorflow/bazel-out/x64_windows-opt/bin/native_client/libdeepspeech.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "synthesize_features")]
+        [DllImport(@"C:/users/neoxz/_bazel_neoxz/yiuexqz6/execroot/org_tensorflow/bazel-out/x64_windows-opt/bin/native_client/libdeepspeech.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "synthesize_features")]
         public static extern unsafe int synthesize_features(string input, string output, int use_taco);
 
-        [DllImport(@"C:/users/neoxz/_bazel_neoxz/i3e7wymj/execroot/org_tensorflow/bazel-out/x64_windows-opt/bin/native_client/libdeepspeech.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "tts")]
+        [DllImport(@"C:/users/neoxz/_bazel_neoxz/yiuexqz6/execroot/org_tensorflow/bazel-out/x64_windows-opt/bin/native_client/libdeepspeech.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "tts")]
         public static extern unsafe void tts(string text);
-         
+        [DllImport(@"C:/users/neoxz/_bazel_neoxz/yiuexqz6/execroot/org_tensorflow/bazel-out/x64_windows-opt/bin/native_client/libdeepspeech.so", CallingConvention = CallingConvention.Cdecl, EntryPoint = "init")]
+        public static extern unsafe void init(string modelpath);
         #endregion
     }
 }
