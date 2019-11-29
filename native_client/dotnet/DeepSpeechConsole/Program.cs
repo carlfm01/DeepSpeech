@@ -69,7 +69,7 @@ namespace CSharpExamples
                     stopwatch.Reset();
                     if (lm != null)
                     {
-                        Console.WriteLine("Loadin LM...");
+                        Console.WriteLine("Loading LM...");
                         sttClient.EnableDecoderWithLM(
                             lm ?? "lm.binary",
                             trie ?? "trie",

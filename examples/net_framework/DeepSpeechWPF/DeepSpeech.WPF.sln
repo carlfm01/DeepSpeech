@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeepSpeech.WPF", "DeepSpeec
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeepSpeechClient", "..\..\..\native_client\dotnet\DeepSpeechClient\DeepSpeechClient.csproj", "{56DE4091-BBBE-47E4-852D-7268B33B971F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeepSpeech.WPF.Tests", "..\DeepSpeech.WPFTests\DeepSpeech.WPF.Tests.csproj", "{3699DA77-9A15-49F3-A4AE-0E148E279746}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -21,6 +23,10 @@ Global
 		{56DE4091-BBBE-47E4-852D-7268B33B971F}.Debug|x64.Build.0 = Debug|x64
 		{56DE4091-BBBE-47E4-852D-7268B33B971F}.Release|x64.ActiveCfg = Release|x64
 		{56DE4091-BBBE-47E4-852D-7268B33B971F}.Release|x64.Build.0 = Release|x64
+		{3699DA77-9A15-49F3-A4AE-0E148E279746}.Debug|x64.ActiveCfg = Debug|x64
+		{3699DA77-9A15-49F3-A4AE-0E148E279746}.Debug|x64.Build.0 = Debug|x64
+		{3699DA77-9A15-49F3-A4AE-0E148E279746}.Release|x64.ActiveCfg = Release|x64
+		{3699DA77-9A15-49F3-A4AE-0E148E279746}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
