@@ -25,7 +25,7 @@ def _download_and_preprocess_data(data_dir):
     # Conditionally download data to data_dir
     print("Downloading Librivox data set (55GB) into {} if not already present...".format(data_dir))
     with progressbar.ProgressBar(max_value=7, widget=progressbar.AdaptiveETA) as bar:
-        TEST_CLEAN_URL = "https://skgpgg.by.files.1drv.com/y4m0_NKS_iRTKRp108JiwWUNFCsOa_5T838pbjXQYMms5Mq3vkHX4CJNtI8atUTEUJxuHaezOgyLVMAaK4Cd03bzoLf76pWH1awYd8IR5P-Fq9MYIWnAOurAiTULlOWzloSfj_8WyLMt9Rhu9iFEfpBevmHBZasvmcQUZAL5WlWizW4md_TErkxa8wvHQAqaj-x/test-clean.tar.gz"
+        TEST_CLEAN_URL = "http://www.openslr.org/resources/12/test-clean.tar.gz"
         TEST_OTHER_URL = "http://www.openslr.org/resources/12/test-other.tar.gz"
 
         def filename_of(x): return os.path.split(x)[1]
