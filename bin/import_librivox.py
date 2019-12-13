@@ -21,12 +21,12 @@ from tensorflow.python.platform import gfile
 
 SAMPLE_RATE = 16000
 
-def _download_and_preprocess_data(data_dir, download_url):
+def _download_and_preprocess_data(data_dir, clean_url, other_url):
     # Conditionally download data to data_dir
     print("Downloading Librivox data set (55GB) into {} if not already present...".format(data_dir))
     with progressbar.ProgressBar(max_value=7, widget=progressbar.AdaptiveETA) as bar:
-        TEST_CLEAN_URL = download_url
-        TEST_OTHER_URL = "http://www.openslr.org/resources/12/test-other.tar.gz"
+        TEST_CLEAN_URL = clean_url
+        TEST_OTHER_URL = other_url
 
         def filename_of(x): return os.path.split(x)[1]
         test_clean = maybe_download(filename_of(TEST_CLEAN_URL), data_dir, TEST_CLEAN_URL)
@@ -131,4 +131,4 @@ def _convert_audio_and_split_sentences(extracted_dir, data_set, dest_dir):
     return pandas.DataFrame(data=files, columns=["wav_filename", "wav_filesize", "transcript"])
 
 if __name__ == "__main__":
-    _download_and_preprocess_data(sys.argv[1], sys.argv[2])
+    _download_and_preprocess_data(sys.argv[1], sys.argv[2], sys.argv[3])
