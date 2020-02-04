@@ -230,7 +230,7 @@ def calculate_mean_edit_distance_and_loss(iterator, dropout, reuse):
     logits, _ = create_model(batch_x, batch_seq_len, dropout, reuse=reuse, rnn_impl=rnn_impl)
 
     # Compute the CTC loss using TensorFlow's `ctc_loss`
-    total_loss = tfv1.nn.ctc_loss(labels=batch_y, inputs=logits, sequence_length=batch_seq_len)
+    total_loss = tfv1.nn.ctc_loss(labels=batch_y, inputs=logits, sequence_length=batch_seq_len, ignore_longer_outputs_than_inputs=True)
 
     # Check if any files lead to non finite loss
     non_finite_files = tf.gather(batch_filenames, tfv1.where(~tf.math.is_finite(total_loss)))
@@ -309,20 +309,7 @@ def get_tower_results(iterator, optimizer, dropout_rates, drop_source_layers):
                     tower_avg_losses.append(avg_loss)
 
                     # Compute gradients for model parameters using tower's mini-batch
-                    if FLAGS.load == "transfer" and not FLAGS.fine_tune:
-                        # train from source model and freeze old layers
-                        # aka - only update new layers
-                        gradients = optimizer.compute_gradients(
-                            avg_loss,
-                            var_list = [ v for v in tfv1.trainable_variables()
-                                         if any(
-                                                 layer in v.op.name
-                                                 for layer in drop_source_layers
-                                         )]
-                        )
-                    else:
-                        # fine tune all layers
-                        gradients = optimizer.compute_gradients(avg_loss)
+                    gradients = optimizer.compute_gradients(avg_loss)
                         
                     # Retain tower's gradients
                     tower_gradients.append(gradients)
@@ -478,10 +465,9 @@ def train():
     #    drop_source_layers=['6']
     #
 
-    if FLAGS.load == "transfer":
-        drop_source_layers = ['2', '3', 'lstm', '5', '6'][-FLAGS.drop_source_layers:]
-    else:
-        drop_source_layers=None
+    
+    drop_source_layers = ['2', '3', 'lstm', '5', '6'][-FLAGS.drop_source_layers:]
+    
     
     # Dropout
     dropout_rates = [tfv1.placeholder(tf.float32, name='dropout_{}'.format(i)) for i in range(6)]
@@ -544,74 +530,28 @@ def train():
         # Loading or initializing
         loaded = False
 
-        # Initialize training from a CuDNN RNN checkpoint
-        if FLAGS.cudnn_checkpoint:
-            if FLAGS.use_cudnn_rnn:
-                log_error('Trying to use --cudnn_checkpoint but --use_cudnn_rnn '
-                          'was specified. The --cudnn_checkpoint flag is only '
-                          'needed when converting a CuDNN RNN checkpoint to '
-                          'a CPU-capable graph. If your system is capable of '
-                          'using CuDNN RNN, you can just specify the CuDNN RNN '
-                          'checkpoint normally with --checkpoint_dir.')
-                sys.exit(1)
-
-            log_info('Converting CuDNN RNN checkpoint from {}'.format(FLAGS.cudnn_checkpoint))
-            ckpt = tfv1.train.load_checkpoint(FLAGS.cudnn_checkpoint)
+        if FLAGS.source_model_checkpoint_dir:
+            print('Initializing model from', FLAGS.source_model_checkpoint_dir)
+            ckpt = tfv1.train.load_checkpoint(FLAGS.source_model_checkpoint_dir)
+            variables = list(ckpt.get_variable_to_shape_map().keys())
+            print(drop_source_layers)
             missing_variables = []
-
-            # Load compatible variables from checkpoint
-            for v in tfv1.global_variables():
-                try:
-                    v.load(ckpt.get_tensor(v.op.name), session=session)
-                except tf.errors.NotFoundError:
-                    missing_variables.append(v)
-
-            # Check that the only missing variables are the Adam moment tensors
-            if any('Adam' not in v.op.name for v in missing_variables):
-                log_error('Tried to load a CuDNN RNN checkpoint but there were '
-                          'more missing variables than just the Adam moment '
-                          'tensors.')
-                sys.exit(1)
-
-            # Initialize Adam moment tensors from scratch to allow use of CuDNN
-            # RNN checkpoints.
-            log_info('Initializing missing Adam moment tensors.')
-            init_op = tfv1.variables_initializer(missing_variables)
-            session.run(init_op)
-            loaded = True
-            
-        if not loaded and FLAGS.load in ['auto', 'last']:
-            tf.initialize_all_variables().run()
-            loaded = try_loading(session, checkpoint_saver, 'checkpoint', 'most recent')
-        if not loaded and FLAGS.load in ['auto', 'best']:
-            tf.initialize_all_variables().run()
-            loaded = try_loading(session, best_dev_saver, 'best_dev_checkpoint', 'best validation') 
-        if not loaded and FLAGS.load == "transfer":
-            if FLAGS.source_model_checkpoint_dir:
-                print('Initializing model from', FLAGS.source_model_checkpoint_dir)
-                ckpt = tfv1.train.load_checkpoint(FLAGS.source_model_checkpoint_dir)
-                variables = list(ckpt.get_variable_to_shape_map().keys())
-
-                # Load desired source variables
-                for v in tf.global_variables():
-                    if not any(layer in v.op.name for layer in drop_source_layers):
-                        print('Loading', v.op.name)
+            # Load desired source variables
+            for v in tf.compat.v1.global_variables():
+                if not any(layer in v.op.name for layer in drop_source_layers):
+                    print('Loading', v.op.name)
+                    try:
                         v.load(ckpt.get_tensor(v.op.name), session=session)
-
-                # Initialize all variables needed for DS, but not loaded from ckpt
-                init_op = tfv1.variables_initializer(
-                    [v for v in tf.global_variables()
-                     if any(layer in v.op.name
-                            for layer in drop_source_layers)
-                     ])
-                session.run(init_op)
-        elif FLAGS.load in ['auto', 'init']:
-            log_info('Initializing variables...')
-            session.run(initializer)
-        else:
-            log_error('Unable to load %s model from specified checkpoint dir'
-                      ' - consider using load option "auto" or "init".' % FLAGS.load)
-            sys.exit(1)
+                    except tf.errors.NotFoundError:
+                        missing_variables.append(v)
+                    
+            # Initialize all variables needed for DS, but not loaded from ckpt
+            init_op = tfv1.variables_initializer(
+                [v for v in tf.compat.v1.global_variables()
+                 if any(layer in v.op.name
+                        for layer in drop_source_layers)
+                 ]+missing_variables)
+            session.run(init_op)
         
         tfv1.get_default_graph().finalize()
         
