@@ -23,17 +23,22 @@ node --version
 npm --version
 
 NODE_ROOT="${DS_ROOT_TASK}/ds-test/"
+NODE_CACHE="${DS_ROOT_TASK}/ds-test.cache/"
 export NODE_PATH="${NODE_ROOT}/node_modules/"
 export PATH="${NODE_ROOT}:${NODE_PATH}/.bin/:${NODE_PATH}/electron/dist/:$PATH"
 
-npm install --prefix ${NODE_ROOT} electron@${electronver}
+npm install --prefix ${NODE_ROOT} --cache ${NODE_CACHE} electron@${electronver}
 
-npm install --prefix ${NODE_ROOT} ${DEEPSPEECH_NODEJS}/deepspeech-${DS_VERSION}.tgz
+deepspeech_npm_url=$(get_dep_npm_pkg_url)
+npm install --prefix ${NODE_ROOT} --cache ${NODE_CACHE} ${deepspeech_npm_url}
 
 if [ "${OS}" = "Darwin" ]; then
   ln -s Electron.app/Contents/MacOS/Electron "${NODE_ROOT}/node_modules/electron/dist/node"
 else
   ln -s electron "${NODE_ROOT}/node_modules/electron/dist/node"
+  if [ -f "${NODE_ROOT}/node_modules/electron/dist//chrome-sandbox" ]; then
+    export ELECTRON_DISABLE_SANDBOX=1
+  fi;
 fi
 
 find ${NODE_ROOT}/node_modules/electron/dist/

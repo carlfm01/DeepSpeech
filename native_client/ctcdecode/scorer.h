@@ -43,19 +43,33 @@ class Scorer {
   using FstType = PathTrie::FstType;
 
 public:
-  Scorer(double alpha,
-         double beta,
-         const std::string &lm_path,
-         const std::string &trie_path,
-         const Alphabet &alphabet);
-  Scorer(double alpha,
-         double beta,
-         const std::string &lm_path,
-         const std::string &trie_path,
-         const std::string &alphabet_config_path);
-  ~Scorer();
+  Scorer() = default;
+  ~Scorer() = default;
 
-  double get_log_cond_prob(const std::vector<std::string> &words);
+  // disallow copying
+  Scorer(const Scorer&) = delete;
+  Scorer& operator=(const Scorer&) = delete;
+
+  int init(double alpha,
+           double beta,
+           const std::string &lm_path,
+           const std::string &trie_path,
+           const Alphabet &alphabet);
+
+  int init(double alpha,
+           double beta,
+           const std::string &lm_path,
+           const std::string &trie_path,
+           const std::string &alphabet_config_path);
+
+  double get_log_cond_prob(const std::vector<std::string> &words,
+                           bool bos = false,
+                           bool eos = false);
+
+  double get_log_cond_prob(const std::vector<std::string>::const_iterator &begin,
+                           const std::vector<std::string>::const_iterator &end,
+                           bool bos = false,
+                           bool eos = false);
 
   double get_sent_log_prob(const std::vector<std::string> &words);
 
@@ -63,7 +77,7 @@ public:
   size_t get_max_order() const { return max_order_; }
 
   // retrun true if the language model is character based
-  bool is_character_based() const { return is_character_based_; }
+  bool is_utf8_mode() const { return is_utf8_mode_; }
 
   // reset params alpha & beta
   void reset_params(float alpha, float beta);
@@ -73,15 +87,18 @@ public:
 
   // trransform the labels in index to the vector of words (word based lm) or
   // the vector of characters (character based lm)
-  std::vector<std::string> split_labels(const std::vector<int> &labels);
+  std::vector<std::string> split_labels_into_scored_units(const std::vector<int> &labels);
 
   // save dictionary in file
   void save_dictionary(const std::string &path);
 
+  // return weather this step represents a boundary where beam scoring should happen
+  bool is_scoring_boundary(PathTrie* prefix, size_t new_label);
+
   // language model weight
-  double alpha;
+  double alpha = 0.;
   // word insertion weight
-  double beta;
+  double beta = 0.;
 
   // pointer to the dictionary of FST
   std::unique_ptr<FstType> dictionary;
@@ -94,14 +111,12 @@ protected:
   void load_lm(const std::string &lm_path);
 
   // fill dictionary for FST
-  void fill_dictionary(const std::vector<std::string> &vocabulary, bool add_space);
-
-  double get_log_prob(const std::vector<std::string> &words);
+  void fill_dictionary(const std::vector<std::string> &vocabulary);
 
 private:
   std::unique_ptr<lm::base::Model> language_model_;
-  bool is_character_based_;
-  size_t max_order_;
+  bool is_utf8_mode_ = true;
+  size_t max_order_ = 0;
 
   int SPACE_ID_;
   Alphabet alphabet_;

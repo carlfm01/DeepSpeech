@@ -39,7 +39,12 @@ PathTrie* PathTrie::get_path_trie(int new_char, int new_timestep, float cur_log_
   auto child = children_.begin();
   for (child = children_.begin(); child != children_.end(); ++child) {
     if (child->first == new_char) {
-      if (child->second->log_prob_c < cur_log_prob_c) {
+      // If existing child matches this new_char but had a lower probability,
+      // and it's a leaf, update its timestep to new_timestep.
+      // The leak check makes sure we don't update the child to have a later
+      // timestep than a grandchild.
+      if (child->second->log_prob_c < cur_log_prob_c &&
+          child->second->children_.size() == 0) {
         child->second->log_prob_c = cur_log_prob_c;
         child->second->timestep = new_timestep;
       }
@@ -54,7 +59,7 @@ PathTrie* PathTrie::get_path_trie(int new_char, int new_timestep, float cur_log_
       child->second->log_prob_b_cur = -NUM_FLT_INF;
       child->second->log_prob_nb_cur = -NUM_FLT_INF;
     }
-    return (child->second);
+    return child->second;
   } else {
     if (has_dictionary_) {
       matcher_->SetState(dictionary_state_);
@@ -106,23 +111,66 @@ PathTrie* PathTrie::get_path_trie(int new_char, int new_timestep, float cur_log_
   }
 }
 
-PathTrie* PathTrie::get_path_vec(std::vector<int>& output, std::vector<int>& timesteps) {
-  return get_path_vec(output, timesteps, ROOT_);
-}
-
-PathTrie* PathTrie::get_path_vec(std::vector<int>& output,
-                                 std::vector<int>& timesteps,
-                                 int stop,
-                                 size_t max_steps) {
-  if (character == stop || character == ROOT_ || output.size() == max_steps) {
-    std::reverse(output.begin(), output.end());
-    std::reverse(timesteps.begin(), timesteps.end());
-    return this;
-  } else {
+void PathTrie::get_path_vec(std::vector<int>& output, std::vector<int>& timesteps) {
+  // Recursive call: recurse back until stop condition, then append data in
+  // correct order as we walk back down the stack in the lines below.
+  if (parent != nullptr) {
+    parent->get_path_vec(output, timesteps);
+  }
+  if (character != ROOT_) {
     output.push_back(character);
     timesteps.push_back(timestep);
-    return parent->get_path_vec(output, timesteps, stop, max_steps);
   }
+}
+
+PathTrie* PathTrie::get_prev_grapheme(std::vector<int>& output,
+                                      std::vector<int>& timesteps)
+{
+  PathTrie* stop = this;
+  if (character == ROOT_) {
+    return stop;
+  }
+  // Recursive call: recurse back until stop condition, then append data in
+  // correct order as we walk back down the stack in the lines below.
+  //FIXME: use Alphabet instead of hardcoding +1 here
+  if (!byte_is_codepoint_boundary(character + 1)) {
+    stop = parent->get_prev_grapheme(output, timesteps);
+  }
+  output.push_back(character);
+  timesteps.push_back(timestep);
+  return stop;
+}
+
+int PathTrie::distance_to_codepoint_boundary(unsigned char *first_byte)
+{
+  //FIXME: use Alphabet instead of hardcoding +1 here
+  if (byte_is_codepoint_boundary(character + 1)) {
+    *first_byte = (unsigned char)character + 1;
+    return 1;
+  }
+  if (parent != nullptr && parent->character != ROOT_) {
+    return 1 + parent->distance_to_codepoint_boundary(first_byte);
+  }
+  assert(false); // unreachable
+  return 0;
+}
+
+PathTrie* PathTrie::get_prev_word(std::vector<int>& output,
+                                  std::vector<int>& timesteps,
+                                  int space_id)
+{
+  PathTrie* stop = this;
+  if (character == space_id || character == ROOT_) {
+    return stop;
+  }
+  // Recursive call: recurse back until stop condition, then append data in
+  // correct order as we walk back down the stack in the lines below.
+  if (parent != nullptr) {
+    stop = parent->get_prev_word(output, timesteps, space_id);
+  }
+  output.push_back(character);
+  timesteps.push_back(timestep);
+  return stop;
 }
 
 void PathTrie::iterate_to_vec(std::vector<PathTrie*>& output) {
@@ -145,9 +193,7 @@ void PathTrie::remove() {
   exists_ = false;
 
   if (children_.size() == 0) {
-    auto child = parent->children_.begin();
-    for (child = parent->children_.begin(); child != parent->children_.end();
-         ++child) {
+    for (auto child = parent->children_.begin(); child != parent->children_.end(); ++child) {
       if (child->first == character) {
         parent->children_.erase(child);
         break;
@@ -162,12 +208,40 @@ void PathTrie::remove() {
   }
 }
 
-void PathTrie::set_dictionary(PathTrie::FstType* dictionary) {
+void PathTrie::set_dictionary(std::shared_ptr<PathTrie::FstType> dictionary) {
   dictionary_ = dictionary;
-  dictionary_state_ = dictionary->Start();
+  dictionary_state_ = dictionary_->Start();
   has_dictionary_ = true;
 }
 
 void PathTrie::set_matcher(std::shared_ptr<fst::SortedMatcher<FstType>> matcher) {
   matcher_ = matcher;
 }
+
+#ifdef DEBUG
+void PathTrie::vec(std::vector<PathTrie*>& out) {
+  if (parent != nullptr) {
+    parent->vec(out);
+  }
+  out.push_back(this);
+}
+
+void PathTrie::print(const Alphabet& a) {
+  std::vector<PathTrie*> chain;
+  vec(chain);
+  std::string tr;
+  printf("characters:\t ");
+  for (PathTrie* el : chain) {
+    printf("%X ", (unsigned char)(el->character));
+    if (el->character != ROOT_) {
+      tr.append(a.StringFromLabel(el->character));
+    }
+  }
+  printf("\ntimesteps:\t ");
+  for (PathTrie* el : chain) {
+    printf("%d ", el->timestep);
+  }
+  printf("\n");
+  printf("transcript:\t %s\n", tr.c_str());
+}
+#endif // DEBUG

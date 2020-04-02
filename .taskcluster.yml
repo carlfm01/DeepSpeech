@@ -7,8 +7,8 @@ metadata:
   owner: "{{ event.head.user.email }}" # the user who sent the pr/push e-mail will be inserted here
   source: "{{ event.head.repo.url }}"  # the repo where the pr came from will be inserted here
 tasks:
-  - provisionerId: "{{ taskcluster.docker.provisionerId }}"
-    workerType: "deepspeech-worker"
+  - provisionerId: "proj-deepspeech"
+    workerType: "ci"
     extra:
       github:
         env: true
@@ -25,18 +25,14 @@ tasks:
       - "notify.irc-channel.#machinelearning.on-any"
 
     scopes: [
-      "queue:create-task:lowest:{{ taskcluster.docker.provisionerId }}/deepspeech-worker",
-      "queue:create-task:lowest:{{ taskcluster.docker.provisionerId }}/deepspeech-win",
-      "queue:create-task:lowest:{{ taskcluster.docker.provisionerId }}/deepspeech-kvm-worker",
-      "queue:create-task:lowest:deepspeech-provisioner/ds-macos-light",
-      "queue:create-task:lowest:deepspeech-provisioner/ds-scriptworker",
-      "queue:create-task:lowest:deepspeech-provisioner/ds-rpi3",
-      "queue:create-task:lowest:deepspeech-provisioner/ds-lepotato",
+      "queue:create-task:highest:proj-deepspeech/*",
       "queue:route:index.project.deepspeech.*",
       "queue:route:notify.irc-channel.*",
       "queue:scheduler-id:taskcluster-github",
       "generic-worker:cache:deepspeech-homebrew-bin",
-      "generic-worker:cache:deepspeech-homebrew-cache"
+      "generic-worker:cache:deepspeech-homebrew-cache",
+      "generic-worker:cache:deepspeech-homebrew-local",
+      "generic-worker:cache:deepspeech-macos-pyenv",
     ]
 
     payload:
@@ -55,7 +51,6 @@ tasks:
         - "-cxe"
         - >
           echo "deb http://archive.ubuntu.com/ubuntu/ trusty-updates main" > /etc/apt/sources.list.d/trusty-updates.list &&
-          sed -ri -e "s|archive.ubuntu.com|${TASKCLUSTER_WORKER_GROUP}.ec2.archive.ubuntu.com|g" -e "s|security.ubuntu.com|${TASKCLUSTER_WORKER_GROUP}.ec2.archive.ubuntu.com|g" /etc/apt/sources.list &&
           apt-get -qq update && apt-get -qq -y install git python3-pip curl sudo &&
           adduser --system --home /home/build-user build-user &&
           cd /home/build-user/ &&

@@ -2,10 +2,8 @@
 
 set -xe
 
-ldc93s1_dir="./data/ldc93s1-tc"
+ldc93s1_dir="./data/smoke_test"
 ldc93s1_csv="${ldc93s1_dir}/ldc93s1.csv"
-
-epoch_count=$1
 
 if [ ! -f "${ldc93s1_dir}/ldc93s1.csv" ]; then
     echo "Downloading and preprocessing LDC93S1 example data, saving in ${ldc93s1_dir}."

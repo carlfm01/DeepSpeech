@@ -12,13 +12,17 @@
 
 char* model = NULL;
 
-char* alphabet = NULL;
-
 char* lm = NULL;
 
 char* trie = NULL;
 
 char* audio = NULL;
+
+int beam_width = 500;
+
+float lm_alpha = 0.75f;
+
+float lm_beta = 1.85f;
 
 bool load_without_trie = false;
 
@@ -35,15 +39,17 @@ int stream_size = 0;
 void PrintHelp(const char* bin)
 {
     std::cout <<
-    "Usage: " << bin << " --model MODEL --alphabet ALPHABET [--lm LM --trie TRIE] --audio AUDIO [-t] [-e]\n"
+    "Usage: " << bin << " --model MODEL [--lm LM --trie TRIE] --audio AUDIO [-t] [-e]\n"
     "\n"
     "Running DeepSpeech inference.\n"
     "\n"
     "	--model MODEL		Path to the model (protocol buffer binary file)\n"
-    "	--alphabet ALPHABET	Path to the configuration file specifying the alphabet used by the network\n"
     "	--lm LM			Path to the language model binary file\n"
     "	--trie TRIE		Path to the language model trie file created with native_client/generate_trie\n"
     "	--audio AUDIO		Path to the audio file to run (WAV format)\n"
+    "	--beam_width BEAM_WIDTH	Value for decoder beam width (int)\n"
+    "	--lm_alpha LM_ALPHA	Value for language model alpha param (float)\n"
+    "	--lm_beta LM_BETA	Value for language model beta param (float)\n"
     "	-t			Run in benchmark mode, output mfcc & inference time\n"
     "	--extended		Output string from extended metadata\n"
     "	--json			Extended output, shows word timings as JSON\n"
@@ -56,13 +62,15 @@ void PrintHelp(const char* bin)
 
 bool ProcessArgs(int argc, char** argv)
 {
-    const char* const short_opts = "m:a:l:r:w:tehv";
+    const char* const short_opts = "m:a:l:r:w:c:d:b:tehv";
     const option long_opts[] = {
             {"model", required_argument, nullptr, 'm'},
-            {"alphabet", required_argument, nullptr, 'a'},
             {"lm", required_argument, nullptr, 'l'},
             {"trie", required_argument, nullptr, 'r'},
             {"audio", required_argument, nullptr, 'w'},
+            {"beam_width", required_argument, nullptr, 'b'},
+            {"lm_alpha", required_argument, nullptr, 'c'},
+            {"lm_beta", required_argument, nullptr, 'd'},
             {"run_very_slowly_without_trie_I_really_know_what_Im_doing", no_argument, nullptr, 999},
             {"t", no_argument, nullptr, 't'},
             {"extended", no_argument, nullptr, 'e'},
@@ -86,10 +94,6 @@ bool ProcessArgs(int argc, char** argv)
             model = optarg;
             break;
 
-        case 'a':
-            alphabet = optarg;
-            break;
-
         case 'l':
             lm = optarg;
             break;
@@ -101,6 +105,18 @@ bool ProcessArgs(int argc, char** argv)
         case 'w':
             audio = optarg;
             break;
+
+	case 'b':
+	    beam_width = atoi(optarg);
+	    break;
+	
+	case 'c':
+	    lm_alpha = atof(optarg);
+	    break;
+	
+	case 'd':
+	    lm_beta = atof(optarg);
+	    break;
 
         case 999:
             load_without_trie = true;
@@ -139,7 +155,7 @@ bool ProcessArgs(int argc, char** argv)
         return false;
     }
 
-    if (!model || !alphabet || !audio) {
+    if (!model || !audio) {
         PrintHelp(argv[0]);
         return false;
     }

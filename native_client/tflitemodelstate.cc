@@ -1,5 +1,8 @@
 #include "tflitemodelstate.h"
 
+#include "tensorflow/lite/string_util.h"
+#include "workspace_status.h"
+
 using namespace tflite;
 using std::vector;
 
@@ -89,12 +92,9 @@ TFLiteModelState::~TFLiteModelState()
 
 int
 TFLiteModelState::init(const char* model_path,
-                       unsigned int n_features,
-                       unsigned int n_context,
-                       const char* alphabet_path,
                        unsigned int beam_width)
 {
-  int err = ModelState::init(model_path, n_features, n_context, alphabet_path, beam_width);
+  int err = ModelState::init(model_path, beam_width);
   if (err != DS_ERR_OK) {
     return err;
   }
@@ -125,6 +125,23 @@ TFLiteModelState::init(const char* model_path,
   new_state_h_idx_      = get_output_tensor_by_name("new_state_h");
   mfccs_idx_            = get_output_tensor_by_name("mfccs");
 
+  int metadata_version_idx  = get_output_tensor_by_name("metadata_version");
+  int metadata_sample_rate_idx      = get_output_tensor_by_name("metadata_sample_rate");
+  int metadata_feature_win_len_idx  = get_output_tensor_by_name("metadata_feature_win_len");
+  int metadata_feature_win_step_idx = get_output_tensor_by_name("metadata_feature_win_step");
+  int metadata_alphabet_idx = get_output_tensor_by_name("metadata_alphabet");
+
+  std::vector<int> metadata_exec_plan;
+  metadata_exec_plan.push_back(find_parent_node_ids(metadata_version_idx)[0]);
+  metadata_exec_plan.push_back(find_parent_node_ids(metadata_sample_rate_idx)[0]);
+  metadata_exec_plan.push_back(find_parent_node_ids(metadata_feature_win_len_idx)[0]);
+  metadata_exec_plan.push_back(find_parent_node_ids(metadata_feature_win_step_idx)[0]);
+  metadata_exec_plan.push_back(find_parent_node_ids(metadata_alphabet_idx)[0]);
+
+  for (int i = 0; i < metadata_exec_plan.size(); ++i) {
+    assert(metadata_exec_plan[i] > -1);
+  }
+
   // When we call Interpreter::Invoke, the whole graph is executed by default,
   // which means every time compute_mfcc is called the entire acoustic model is
   // also executed. To workaround that problem, we walk up the dependency DAG
@@ -133,14 +150,65 @@ TFLiteModelState::init(const char* model_path,
   auto mfcc_plan = find_parent_node_ids(mfccs_idx_);
   auto orig_plan = interpreter_->execution_plan();
 
-  // Remove MFCC nodes from original plan (all nodes) to create the acoustic model plan
-  auto erase_begin = std::remove_if(orig_plan.begin(), orig_plan.end(), [&mfcc_plan](int elem) {
-    return std::find(mfcc_plan.begin(), mfcc_plan.end(), elem) != mfcc_plan.end();
+  // Remove MFCC and Metatda nodes from original plan (all nodes) to create the acoustic model plan
+  auto erase_begin = std::remove_if(orig_plan.begin(), orig_plan.end(), [&mfcc_plan, &metadata_exec_plan](int elem) {
+    return (std::find(mfcc_plan.begin(), mfcc_plan.end(), elem) != mfcc_plan.end()
+         || std::find(metadata_exec_plan.begin(), metadata_exec_plan.end(), elem) != metadata_exec_plan.end());
   });
   orig_plan.erase(erase_begin, orig_plan.end());
 
   acoustic_exec_plan_ = std::move(orig_plan);
   mfcc_exec_plan_ = std::move(mfcc_plan);
+
+  interpreter_->SetExecutionPlan(metadata_exec_plan);
+  TfLiteStatus status = interpreter_->Invoke();
+  if (status != kTfLiteOk) {
+    std::cerr << "Error running session: " << status << "\n";
+    return DS_ERR_FAIL_INTERPRETER;
+  }
+
+  int* const graph_version = interpreter_->typed_tensor<int>(metadata_version_idx);
+  if (graph_version == nullptr) {
+    std::cerr << "Unable to read model file version." << std::endl;
+    return DS_ERR_MODEL_INCOMPATIBLE;
+  }
+
+  if (*graph_version < ds_graph_version()) {
+    std::cerr << "Specified model file version (" << *graph_version << ") is "
+              << "incompatible with minimum version supported by this client ("
+              << ds_graph_version() << "). See "
+              << "https://github.com/mozilla/DeepSpeech/blob/master/USING.rst#model-compatibility "
+              << "for more information" << std::endl;
+    return DS_ERR_MODEL_INCOMPATIBLE;
+  }
+
+  int* const model_sample_rate = interpreter_->typed_tensor<int>(metadata_sample_rate_idx);
+  if (model_sample_rate == nullptr) {
+    std::cerr << "Unable to read model sample rate." << std::endl;
+    return DS_ERR_MODEL_INCOMPATIBLE;
+  }
+
+  sample_rate_ = *model_sample_rate;
+
+  int* const win_len_ms  = interpreter_->typed_tensor<int>(metadata_feature_win_len_idx);
+  int* const win_step_ms = interpreter_->typed_tensor<int>(metadata_feature_win_step_idx);
+  if (win_len_ms == nullptr || win_step_ms == nullptr) {
+    std::cerr << "Unable to read model feature window informations." << std::endl;
+    return DS_ERR_MODEL_INCOMPATIBLE;
+  }
+
+  audio_win_len_  = sample_rate_ * (*win_len_ms / 1000.0);
+  audio_win_step_ = sample_rate_ * (*win_step_ms / 1000.0);
+
+  tflite::StringRef serialized_alphabet = tflite::GetString(interpreter_->tensor(metadata_alphabet_idx), 0);
+  err = alphabet_.deserialize(serialized_alphabet.str, serialized_alphabet.len);
+  if (err != 0) {
+    return DS_ERR_INVALID_ALPHABET;
+  }
+
+  assert(sample_rate_ > 0);
+  assert(audio_win_len_ > 0);
+  assert(audio_win_step_ > 0);
 
   TfLiteIntArray* dims_input_node = interpreter_->tensor(input_node_idx_)->dims;
 
@@ -151,9 +219,9 @@ TFLiteModelState::init(const char* model_path,
 
   TfLiteIntArray* dims_logits = interpreter_->tensor(logits_idx_)->dims;
   const int final_dim_size = dims_logits->data[1] - 1;
-  if (final_dim_size != alphabet_->GetSize()) {
+  if (final_dim_size != alphabet_.GetSize()) {
     std::cerr << "Error: Alphabet size does not match loaded model: alphabet "
-              << "has size " << alphabet_->GetSize()
+              << "has size " << alphabet_.GetSize()
               << ", but model has " << final_dim_size
               << " classes in its output. Make sure you're passing an alphabet "
               << "file with the same size as the one used for training."
@@ -208,7 +276,7 @@ TFLiteModelState::infer(const vector<float>& mfcc,
                         vector<float>& state_c_output,
                         vector<float>& state_h_output)
 {
-  const size_t num_classes = alphabet_->GetSize() + 1; // +1 for blank
+  const size_t num_classes = alphabet_.GetSize() + 1; // +1 for blank
 
   // Feeding input_node
   copy_vector_to_tensor(mfcc, input_node_idx_, n_frames*mfcc_feats_per_timestep_);

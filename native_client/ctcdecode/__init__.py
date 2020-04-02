@@ -6,11 +6,9 @@ from . import swigwrapper
 class Scorer(swigwrapper.Scorer):
     """Wrapper for Scorer.
 
-    :param alpha: Parameter associated with language model. Don't use
-                  language model when alpha = 0.
+    :param alpha: Language model weight.
     :type alpha: float
-    :param beta: Parameter associated with word count. Don't use word
-                 count when beta = 0.
+    :param beta: Word insertion bonus.
     :type beta: float
     :model_path: Path to load language model.
     :trie_path: Path to trie file.
@@ -19,7 +17,19 @@ class Scorer(swigwrapper.Scorer):
     """
 
     def __init__(self, alpha, beta, model_path, trie_path, alphabet):
-        swigwrapper.Scorer.__init__(self, alpha, beta, model_path, trie_path, alphabet.config_file())
+        super(Scorer, self).__init__()
+        serialized = alphabet.serialize()
+        native_alphabet = swigwrapper.Alphabet()
+        err = native_alphabet.deserialize(serialized, len(serialized))
+        if err != 0:
+            raise ValueError("Error when deserializing alphabet.")
+
+        err = self.init(alpha, beta,
+                        model_path.encode('utf-8'),
+                        trie_path.encode('utf-8'),
+                        native_alphabet)
+        if err != 0:
+            raise ValueError("Scorer initialization failed with error code {}".format(err), err)
 
 
 def ctc_beam_search_decoder(probs_seq,
@@ -34,8 +44,7 @@ def ctc_beam_search_decoder(probs_seq,
                       step, with each element being a list of normalized
                       probabilities over alphabet and blank.
     :type probs_seq: 2-D list
-    :param alphabet: alphabet list.
-    :alphabet: Alphabet
+    :param alphabet: Alphabet
     :param beam_size: Width for beam search.
     :type beam_size: int
     :param cutoff_prob: Cutoff probability in pruning,
@@ -48,14 +57,19 @@ def ctc_beam_search_decoder(probs_seq,
     :param scorer: External scorer for partially decoded sentence, e.g. word
                    count or language model.
     :type scorer: Scorer
-    :return: List of tuples of log probability and sentence as decoding
-             results, in descending order of the probability.
+    :return: List of tuples of confidence and sentence as decoding
+             results, in descending order of the confidence.
     :rtype: list
     """
+    serialized = alphabet.serialize()
+    native_alphabet = swigwrapper.Alphabet()
+    err = native_alphabet.deserialize(serialized, len(serialized))
+    if err != 0:
+        raise ValueError("Error when deserializing alphabet.")
     beam_results = swigwrapper.ctc_beam_search_decoder(
-        probs_seq, alphabet.config_file(), beam_size, cutoff_prob, cutoff_top_n,
+        probs_seq, native_alphabet, beam_size, cutoff_prob, cutoff_top_n,
         scorer)
-    beam_results = [(res.probability, alphabet.decode(res.tokens)) for res in beam_results]
+    beam_results = [(res.confidence, alphabet.decode(res.tokens)) for res in beam_results]
     return beam_results
 
 
@@ -90,15 +104,18 @@ def ctc_beam_search_decoder_batch(probs_seq,
     :param scorer: External scorer for partially decoded sentence, e.g. word
                    count or language model.
     :type scorer: Scorer
-    :return: List of tuples of log probability and sentence as decoding
-             results, in descending order of the probability.
+    :return: List of tuples of confidence and sentence as decoding
+             results, in descending order of the confidence.
     :rtype: list
     """
-    batch_beam_results = swigwrapper.ctc_beam_search_decoder_batch(
-        probs_seq, seq_lengths, alphabet.config_file(), beam_size, num_processes,
-        cutoff_prob, cutoff_top_n, scorer)
+    serialized = alphabet.serialize()
+    native_alphabet = swigwrapper.Alphabet()
+    err = native_alphabet.deserialize(serialized, len(serialized))
+    if err != 0:
+        raise ValueError("Error when deserializing alphabet.")
+    batch_beam_results = swigwrapper.ctc_beam_search_decoder_batch(probs_seq, seq_lengths, native_alphabet, beam_size, num_processes, cutoff_prob, cutoff_top_n, scorer)
     batch_beam_results = [
-        [(res.probability, alphabet.decode(res.tokens)) for res in beam_results]
+        [(res.confidence, alphabet.decode(res.tokens)) for res in beam_results]
         for beam_results in batch_beam_results
     ]
     return batch_beam_results
