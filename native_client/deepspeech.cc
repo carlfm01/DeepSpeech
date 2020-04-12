@@ -39,7 +39,7 @@ using std::vector;
 
    The streaming process uses three buffers that are fed eagerly as audio data
    is fed in. The buffers only hold the minimum amount of data needed to do a
-   step in the acoustic model. The three buffers which live in StreamingState
+   step in the acoustic model. The three buffers which live in StreamingContext
    are:
 
    - audio_buffer, used to buffer audio samples until there's enough data to
@@ -71,7 +71,7 @@ struct StreamingState {
   vector<float> previous_state_h_;
 
   ModelState* model_;
-  DecoderState decoder_state_;
+  std::unique_ptr<DecoderState> decoder_state_;
 
   StreamingState();
   ~StreamingState();
@@ -133,21 +133,21 @@ StreamingState::feedAudioContent(const short* buffer,
 char*
 StreamingState::intermediateDecode()
 {
-  return model_->decode(decoder_state_);
+  return model_->decode(decoder_state_.get());
 }
 
 char*
 StreamingState::finishStream()
 {
   finalizeStream();
-  return model_->decode(decoder_state_);
+  return model_->decode(decoder_state_.get());
 }
 
 Metadata*
 StreamingState::finishStreamWithMetadata()
 {
   finalizeStream();
-  return model_->decode_metadata(decoder_state_);
+  return model_->decode_metadata(decoder_state_.get());
 }
 
 void
@@ -244,19 +244,30 @@ StreamingState::processBatch(const vector<float>& buf, unsigned int n_steps)
                 previous_state_c_,
                 previous_state_h_);
 
-  const size_t num_classes = model_->alphabet_.GetSize() + 1; // +1 for blank
+  const int cutoff_top_n = 40;
+  const double cutoff_prob = 1.0;
+  const size_t num_classes = model_->alphabet_->GetSize() + 1; // +1 for blank
   const int n_frames = logits.size() / (ModelState::BATCH_SIZE * num_classes);
 
   // Convert logits to double
   vector<double> inputs(logits.begin(), logits.end());
 
-  decoder_state_.next(inputs.data(),
-                      n_frames,
-                      num_classes);
+  decoder_next(inputs.data(), 
+               *model_->alphabet_,
+               decoder_state_.get(),
+               n_frames,
+               num_classes,
+               cutoff_prob,
+               cutoff_top_n,
+               model_->beam_width_,
+               model_->scorer_);
 }
 
 int
 DS_CreateModel(const char* aModelPath,
+               unsigned int aNCep,
+               unsigned int aNContext,
+               const char* aAlphabetConfigPath,
                unsigned int aBeamWidth,
                ModelState** retval)
 {
@@ -282,7 +293,7 @@ DS_CreateModel(const char* aModelPath,
     return DS_ERR_FAIL_CREATE_MODEL;
   }
 
-  int err = model->init(aModelPath, aBeamWidth);
+  int err = model->init(aModelPath, aNCep, aNContext, aAlphabetConfigPath, aBeamWidth);
   if (err != DS_ERR_OK) {
     return err;
   }
@@ -291,39 +302,36 @@ DS_CreateModel(const char* aModelPath,
   return DS_ERR_OK;
 }
 
-int
-DS_GetModelSampleRate(ModelState* aCtx)
-{
-  return aCtx->sample_rate_;
-}
-
 void
-DS_FreeModel(ModelState* ctx)
+DS_DestroyModel(ModelState* ctx)
 {
   delete ctx;
 }
 
 int
 DS_EnableDecoderWithLM(ModelState* aCtx,
+                       const char* aAlphabetConfigPath,
                        const char* aLMPath,
                        const char* aTriePath,
                        float aLMAlpha,
                        float aLMBeta)
 {
-  aCtx->scorer_.reset(new Scorer());
-  int err = aCtx->scorer_->init(aLMAlpha, aLMBeta,
-                                aLMPath ? aLMPath : "",
-                                aTriePath ? aTriePath : "",
-                                aCtx->alphabet_);
-  if (err != 0) {
+  try {
+    aCtx->scorer_ = new Scorer(aLMAlpha, aLMBeta,
+                               aLMPath ? aLMPath : "",
+                               aTriePath ? aTriePath : "",
+                               *aCtx->alphabet_);
+    return DS_ERR_OK;
+  } catch (...) {
     return DS_ERR_INVALID_LM;
   }
-  return DS_ERR_OK;
 }
 
 int
-DS_CreateStream(ModelState* aCtx,
-                StreamingState** retval)
+DS_SetupStream(ModelState* aCtx,
+               unsigned int aPreAllocFrames,
+               unsigned int aSampleRate,
+               StreamingState** retval)
 {
   *retval = nullptr;
 
@@ -331,6 +339,13 @@ DS_CreateStream(ModelState* aCtx,
   if (!ctx) {
     std::cerr << "Could not allocate streaming state." << std::endl;
     return DS_ERR_FAIL_CREATE_STREAM;
+  }
+
+  const size_t num_classes = aCtx->alphabet_->GetSize() + 1; // +1 for blank
+
+  // Default initial allocation = 3 seconds.
+  if (aPreAllocFrames == 0) {
+    aPreAllocFrames = 150;
   }
 
   ctx->audio_buffer_.reserve(aCtx->audio_win_len_);
@@ -341,14 +356,7 @@ DS_CreateStream(ModelState* aCtx,
   ctx->previous_state_h_.resize(aCtx->state_size_, 0.f);
   ctx->model_ = aCtx;
 
-  const int cutoff_top_n = 40;
-  const double cutoff_prob = 1.0;
-
-  ctx->decoder_state_.init(aCtx->alphabet_,
-                           aCtx->beam_width_,
-                           cutoff_prob,
-                           cutoff_top_n,
-                           aCtx->scorer_.get());
+  ctx->decoder_state_.reset(decoder_init(*aCtx->alphabet_, num_classes, aCtx->scorer_));
 
   *retval = ctx.release();
   return DS_ERR_OK;
@@ -372,7 +380,7 @@ char*
 DS_FinishStream(StreamingState* aSctx)
 {
   char* str = aSctx->finishStream();
-  DS_FreeStream(aSctx);
+  DS_DiscardStream(aSctx);
   return str;
 }
 
@@ -380,17 +388,18 @@ Metadata*
 DS_FinishStreamWithMetadata(StreamingState* aSctx)
 {
   Metadata* metadata = aSctx->finishStreamWithMetadata();
-  DS_FreeStream(aSctx);
+  DS_DiscardStream(aSctx);
   return metadata;
 }
 
 StreamingState*
-CreateStreamAndFeedAudioContent(ModelState* aCtx,
-                                const short* aBuffer,
-                                unsigned int aBufferSize)
+SetupStreamAndFeedAudioContent(ModelState* aCtx,
+                               const short* aBuffer,
+                               unsigned int aBufferSize,
+                               unsigned int aSampleRate)
 {
   StreamingState* ctx;
-  int status = DS_CreateStream(aCtx, &ctx);
+  int status = DS_SetupStream(aCtx, 0, aSampleRate, &ctx);
   if (status != DS_ERR_OK) {
     return nullptr;
   }
@@ -401,23 +410,25 @@ CreateStreamAndFeedAudioContent(ModelState* aCtx,
 char*
 DS_SpeechToText(ModelState* aCtx,
                 const short* aBuffer,
-                unsigned int aBufferSize)
+                unsigned int aBufferSize,
+                unsigned int aSampleRate)
 {
-  StreamingState* ctx = CreateStreamAndFeedAudioContent(aCtx, aBuffer, aBufferSize);
+  StreamingState* ctx = SetupStreamAndFeedAudioContent(aCtx, aBuffer, aBufferSize, aSampleRate);
   return DS_FinishStream(ctx);
 }
 
 Metadata*
 DS_SpeechToTextWithMetadata(ModelState* aCtx,
                             const short* aBuffer,
-                            unsigned int aBufferSize)
+                            unsigned int aBufferSize,
+                            unsigned int aSampleRate)
 {
-  StreamingState* ctx = CreateStreamAndFeedAudioContent(aCtx, aBuffer, aBufferSize);
+  StreamingState* ctx = SetupStreamAndFeedAudioContent(aCtx, aBuffer, aBufferSize, aSampleRate);
   return DS_FinishStreamWithMetadata(ctx);
 }
 
 void
-DS_FreeStream(StreamingState* aSctx)
+DS_DiscardStream(StreamingState* aSctx)
 {
   delete aSctx;
 }

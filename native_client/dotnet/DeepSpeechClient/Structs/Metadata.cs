@@ -15,8 +15,8 @@ namespace DeepSpeechClient.Structs
         /// </summary>
         internal unsafe int num_items;
         /// <summary>
-        /// Approximated confidence value for this transcription.
+        /// Approximated probability (confidence value) for this transcription.
         /// </summary>
-        internal unsafe double confidence;
+        internal unsafe double probability;
     }
 }

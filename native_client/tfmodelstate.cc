@@ -25,9 +25,12 @@ TFModelState::~TFModelState()
 
 int
 TFModelState::init(const char* model_path,
+                   unsigned int n_features,
+                   unsigned int n_context,
+                   const char* alphabet_path,
                    unsigned int beam_width)
 {
-  int err = ModelState::init(model_path, beam_width);
+  int err = ModelState::init(model_path, n_features, n_context, alphabet_path, beam_width);
   if (err != DS_ERR_OK) {
     return err;
   }
@@ -77,52 +80,15 @@ TFModelState::init(const char* model_path,
     return DS_ERR_FAIL_CREATE_SESS;
   }
 
-  std::vector<tensorflow::Tensor> version_output;
-  status = session_->Run({}, {
-    "metadata_version"
-  }, {}, &version_output);
-  if (!status.ok()) {
-    std::cerr << "Unable to fetch graph version: " << status << std::endl;
-    return DS_ERR_MODEL_INCOMPATIBLE;
-  }
-
-  int graph_version = version_output[0].scalar<int>()();
+  int graph_version = graph_def_.version();
   if (graph_version < ds_graph_version()) {
     std::cerr << "Specified model file version (" << graph_version << ") is "
               << "incompatible with minimum version supported by this client ("
               << ds_graph_version() << "). See "
-              << "https://github.com/mozilla/DeepSpeech/blob/master/USING.rst#model-compatibility "
+              << "https://github.com/mozilla/DeepSpeech/#model-compatibility "
               << "for more information" << std::endl;
     return DS_ERR_MODEL_INCOMPATIBLE;
   }
-
-  std::vector<tensorflow::Tensor> metadata_outputs;
-  status = session_->Run({}, {
-    "metadata_sample_rate",
-    "metadata_feature_win_len",
-    "metadata_feature_win_step",
-    "metadata_alphabet",
-  }, {}, &metadata_outputs);
-  if (!status.ok()) {
-    std::cout << "Unable to fetch metadata: " << status << std::endl;
-    return DS_ERR_MODEL_INCOMPATIBLE;
-  }
-
-  sample_rate_ = metadata_outputs[0].scalar<int>()();
-  int win_len_ms = metadata_outputs[1].scalar<int>()();
-  int win_step_ms = metadata_outputs[2].scalar<int>()();
-  audio_win_len_ = sample_rate_ * (win_len_ms / 1000.0);
-  audio_win_step_ = sample_rate_ * (win_step_ms / 1000.0);
-
-  string serialized_alphabet = metadata_outputs[3].scalar<string>()();
-  err = alphabet_.deserialize(serialized_alphabet.data(), serialized_alphabet.size());
-  if (err != 0) {
-    return DS_ERR_INVALID_ALPHABET;
-  }
-
-  assert(sample_rate_ > 0);
-  assert(audio_win_len_ > 0);
-  assert(audio_win_step_ > 0);
 
   for (int i = 0; i < graph_def_.node_size(); ++i) {
     NodeDef node = graph_def_.node(i);
@@ -142,15 +108,21 @@ TFModelState::init(const char* model_path,
       }
 
       int final_dim_size = logits_shape.vec<int>()(2) - 1;
-      if (final_dim_size != alphabet_.GetSize()) {
+      if (final_dim_size != alphabet_->GetSize()) {
         std::cerr << "Error: Alphabet size does not match loaded model: alphabet "
-                  << "has size " << alphabet_.GetSize()
+                  << "has size " << alphabet_->GetSize()
                   << ", but model has " << final_dim_size
                   << " classes in its output. Make sure you're passing an alphabet "
                   << "file with the same size as the one used for training."
                   << std::endl;
         return DS_ERR_INVALID_ALPHABET;
       }
+    } else if (node.name() == "model_metadata") {
+      sample_rate_ = node.attr().at("sample_rate").i();
+      int win_len_ms = node.attr().at("feature_win_len").i();
+      int win_step_ms = node.attr().at("feature_win_step").i();
+      audio_win_len_ = sample_rate_ * (win_len_ms / 1000.0);
+      audio_win_step_ = sample_rate_ * (win_step_ms / 1000.0);
     }
   }
 
@@ -201,7 +173,7 @@ TFModelState::infer(const std::vector<float>& mfcc,
                     vector<float>& state_c_output,
                     vector<float>& state_h_output)
 {
-  const size_t num_classes = alphabet_.GetSize() + 1; // +1 for blank
+  const size_t num_classes = alphabet_->GetSize() + 1; // +1 for blank
 
   Tensor input = tensor_from_vector(mfcc, TensorShape({BATCH_SIZE, n_steps_, 2*n_context_+1, n_features_}));
   Tensor previous_state_c_t = tensor_from_vector(previous_state_c, TensorShape({BATCH_SIZE, (long long)state_size_}));

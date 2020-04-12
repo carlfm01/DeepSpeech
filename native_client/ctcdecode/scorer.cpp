@@ -27,40 +27,21 @@
 using namespace lm::ngram;
 
 static const int32_t MAGIC = 'TRIE';
-static const int32_t FILE_VERSION = 5;
+static const int32_t FILE_VERSION = 4;
 
-int
-Scorer::init(double alpha,
-             double beta,
-             const std::string& lm_path,
-             const std::string& trie_path,
-             const Alphabet& alphabet)
+Scorer::Scorer(double alpha,
+               double beta,
+               const std::string& lm_path,
+               const std::string& trie_path,
+               const Alphabet& alphabet)
+  : dictionary()
+  , language_model_()
+  , is_character_based_(true)
+  , max_order_(0)
+  , alphabet_(alphabet)
 {
   reset_params(alpha, beta);
-  alphabet_ = alphabet;
-  setup(lm_path, trie_path);
-  return 0;
-}
 
-int
-Scorer::init(double alpha,
-             double beta,
-             const std::string& lm_path,
-             const std::string& trie_path,
-             const std::string& alphabet_config_path)
-{
-  reset_params(alpha, beta);
-  int err = alphabet_.init(alphabet_config_path.c_str());
-  if (err != 0) {
-    return err;
-  }
-  setup(lm_path, trie_path);
-  return 0;
-}
-
-void Scorer::setup(const std::string& lm_path, const std::string& trie_path)
-{
-  // (Re-)Initialize character map
   char_map_.clear();
 
   SPACE_ID_ = alphabet_.GetSpaceLabel();
@@ -72,6 +53,24 @@ void Scorer::setup(const std::string& lm_path, const std::string& trie_path)
     char_map_[alphabet_.StringFromLabel(i)] = i + 1;
   }
 
+  setup(lm_path, trie_path);
+}
+
+Scorer::Scorer(double alpha,
+               double beta,
+               const std::string& lm_path,
+               const std::string& trie_path,
+               const std::string& alphabet_config_path)
+  : Scorer(alpha, beta, lm_path, trie_path, Alphabet(alphabet_config_path.c_str()))
+{
+}
+
+Scorer::~Scorer()
+{
+}
+
+void Scorer::setup(const std::string& lm_path, const std::string& trie_path)
+{
   // load language model
   const char* filename = lm_path.c_str();
   VALID_CHECK_EQ(access(filename, R_OK), 0, "Invalid language model path");
@@ -86,23 +85,17 @@ void Scorer::setup(const std::string& lm_path, const std::string& trie_path)
     language_model_.reset(lm::ngram::LoadVirtual(filename, config));
     auto vocab = enumerate.vocabulary;
     for (size_t i = 0; i < vocab.size(); ++i) {
-      if (vocab[i] != UNK_TOKEN &&
-          vocab[i] != START_TOKEN &&
-          vocab[i] != END_TOKEN &&
-          get_utf8_str_len(vocab[i]) > 1) {
-        is_utf8_mode_ = false;
-        break;
+      if (is_character_based_ && vocab[i] != UNK_TOKEN &&
+          vocab[i] != START_TOKEN && vocab[i] != END_TOKEN &&
+          get_utf8_str_len(enumerate.vocabulary[i]) > 1) {
+        is_character_based_ = false;
       }
     }
-
-    if (alphabet_.GetSize() != 255) {
-      is_utf8_mode_ = false;
+    // fill the dictionary for FST
+    if (!is_character_based()) {
+      fill_dictionary(vocab, true);
     }
-
-    // Add spaces only in word-based scoring
-    fill_dictionary(vocab);
   } else {
-    config.load_method = util::LoadMethod::LAZY;
     language_model_.reset(lm::ngram::LoadVirtual(filename, config));
 
     // Read metadata and trie from file
@@ -126,12 +119,14 @@ void Scorer::setup(const std::string& lm_path, const std::string& trie_path)
       throw 1;
     }
 
-    fin.read(reinterpret_cast<char*>(&is_utf8_mode_), sizeof(is_utf8_mode_));
+    fin.read(reinterpret_cast<char*>(&is_character_based_), sizeof(is_character_based_));
 
-    fst::FstReadOptions opt;
-    opt.mode = fst::FstReadOptions::MAP;
-    opt.source = trie_path;
-    dictionary.reset(FstType::Read(fin, opt));
+    if (!is_character_based_) {
+      fst::FstReadOptions opt;
+      opt.mode = fst::FstReadOptions::MAP;
+      opt.source = trie_path;
+      dictionary.reset(FstType::Read(fin, opt));
+    }
   }
 
   max_order_ = language_model_->Order();
@@ -142,129 +137,63 @@ void Scorer::save_dictionary(const std::string& path)
   std::ofstream fout(path, std::ios::binary);
   fout.write(reinterpret_cast<const char*>(&MAGIC), sizeof(MAGIC));
   fout.write(reinterpret_cast<const char*>(&FILE_VERSION), sizeof(FILE_VERSION));
-  fout.write(reinterpret_cast<const char*>(&is_utf8_mode_), sizeof(is_utf8_mode_));
-  fst::FstWriteOptions opt;
-  opt.align = true;
-  opt.source = path;
-  dictionary->Write(fout, opt);
-}
-
-bool Scorer::is_scoring_boundary(PathTrie* prefix, size_t new_label)
-{
-  if (is_utf8_mode()) {
-    if (prefix->character == -1) {
-      return false;
-    }
-    unsigned char first_byte;
-    int distance_to_boundary = prefix->distance_to_codepoint_boundary(&first_byte);
-    int needed_bytes;
-    if ((first_byte >> 3) == 0x1E) {
-      needed_bytes = 4;
-    } else if ((first_byte >> 4) == 0x0E) {
-      needed_bytes = 3;
-    } else if ((first_byte >> 5) == 0x06) {
-      needed_bytes = 2;
-    } else if ((first_byte >> 7) == 0x00) {
-      needed_bytes = 1;
-    } else {
-      assert(false); // invalid byte sequence. should be unreachable, disallowed by vocabulary/trie
-      return false;
-    }
-    return distance_to_boundary == needed_bytes;
-  } else {
-    return new_label == SPACE_ID_;
+  fout.write(reinterpret_cast<const char*>(&is_character_based_), sizeof(is_character_based_));
+  if (!is_character_based_) {
+    fst::FstWriteOptions opt;
+    opt.align = true;
+    opt.source = path;
+    dictionary->Write(fout, opt);
   }
 }
 
-double Scorer::get_log_cond_prob(const std::vector<std::string>& words,
-                                 bool bos,
-                                 bool eos)
+double Scorer::get_log_cond_prob(const std::vector<std::string>& words)
 {
-  return get_log_cond_prob(words.begin(), words.end(), bos, eos);
-}
-
-double Scorer::get_log_cond_prob(const std::vector<std::string>::const_iterator& begin,
-                                 const std::vector<std::string>::const_iterator& end,
-                                 bool bos,
-                                 bool eos)
-{
-  const auto& vocab = language_model_->BaseVocabulary();
-  lm::ngram::State state_vec[2];
-  lm::ngram::State *in_state = &state_vec[0];
-  lm::ngram::State *out_state = &state_vec[1];
-
-  if (bos) {
-    language_model_->BeginSentenceWrite(in_state);
-  } else {
-    language_model_->NullContextWrite(in_state);
-  }
-
-  double cond_prob = 0.0;
-  for (auto it = begin; it != end; ++it) {
-    lm::WordIndex word_index = vocab.Index(*it);
-
+  double cond_prob = OOV_SCORE;
+  lm::ngram::State state, tmp_state, out_state;
+  // avoid to inserting <s> in begin
+  language_model_->NullContextWrite(&state);
+  for (size_t i = 0; i < words.size(); ++i) {
+    lm::WordIndex word_index = language_model_->BaseVocabulary().Index(words[i]);
     // encounter OOV
-    if (word_index == lm::kUNK) {
+    if (word_index == 0) {
       return OOV_SCORE;
     }
-
-    cond_prob = language_model_->BaseScore(in_state, word_index, out_state);
-    std::swap(in_state, out_state);
+    cond_prob = language_model_->BaseScore(&state, word_index, &out_state);
+    tmp_state = state;
+    state = out_state;
+    out_state = tmp_state;
   }
-
-  if (eos) {
-    cond_prob = language_model_->BaseScore(in_state, vocab.EndSentence(), out_state);
-  }
-
-  // return loge prob
+  // return  loge prob
   return cond_prob/NUM_FLT_LOGE;
 }
 
 double Scorer::get_sent_log_prob(const std::vector<std::string>& words)
 {
-  // For a given sentence (`words`), return sum of LM scores over windows on
-  // sentence. For example, given the sentence:
-  //
-  //    there once was an ugly barnacle
-  //
-  // And a language model with max_order_ = 3, this function will return the sum
-  // of the following scores:
-  //
-  //    there                  | <s>
-  //    there   once           | <s>
-  //    there   once     was
-  //    once    was      an
-  //    was     an       ugly
-  //    an      ugly     barnacle
-  //    ugly    barnacle </s>
-  //
-  // This is used in the decoding process to compute the LM contribution for a
-  // given beam's accumulated score, so that it can be removed and only the
-  // acoustic model contribution can be returned as a confidence score for the
-  // transcription. See DecoderState::decode.
-  const int sent_len = words.size();
-
-  double score = 0.0;
-  for (int win_start = 0, win_end = 1; win_end <= sent_len+1; ++win_end) {
-    const int win_size = win_end - win_start;
-    bool bos = win_size < max_order_;
-    bool eos = win_end == (sent_len + 1);
-
-    // The last window goes one past the end of the words vector as passing the
-    // EOS=true flag counts towards the length of the scored sentence, so we
-    // adjust the win_end index here to not go over bounds.
-    score += get_log_cond_prob(words.begin() + win_start,
-                               words.begin() + (eos ? win_end - 1 : win_end),
-                               bos,
-                               eos);
-
-    // Only increment window start position after we have a full window
-    if (win_size == max_order_) {
-      win_start++;
+  std::vector<std::string> sentence;
+  if (words.size() == 0) {
+    for (size_t i = 0; i < max_order_; ++i) {
+      sentence.push_back(START_TOKEN);
     }
+  } else {
+    for (size_t i = 0; i < max_order_ - 1; ++i) {
+      sentence.push_back(START_TOKEN);
+    }
+    sentence.insert(sentence.end(), words.begin(), words.end());
   }
+  sentence.push_back(END_TOKEN);
+  return get_log_prob(sentence);
+}
 
-  return score / NUM_FLT_LOGE;
+double Scorer::get_log_prob(const std::vector<std::string>& words)
+{
+  assert(words.size() > max_order_);
+  double score = 0.0;
+  for (size_t i = 0; i < words.size() - max_order_ + 1; ++i) {
+    std::vector<std::string> ngram(words.begin() + i,
+                                   words.begin() + i + max_order_);
+    score += get_log_cond_prob(ngram);
+  }
+  return score;
 }
 
 void Scorer::reset_params(float alpha, float beta)
@@ -273,14 +202,14 @@ void Scorer::reset_params(float alpha, float beta)
   this->beta = beta;
 }
 
-std::vector<std::string> Scorer::split_labels_into_scored_units(const std::vector<int>& labels)
+std::vector<std::string> Scorer::split_labels(const std::vector<int>& labels)
 {
   if (labels.empty()) return {};
 
   std::string s = alphabet_.LabelsToString(labels);
   std::vector<std::string> words;
-  if (is_utf8_mode_) {
-    words = split_into_codepoints(s);
+  if (is_character_based_) {
+    words = split_utf8_str(s);
   } else {
     words = split_str(s, " ");
   }
@@ -294,38 +223,41 @@ std::vector<std::string> Scorer::make_ngram(PathTrie* prefix)
   PathTrie* new_node = nullptr;
 
   for (int order = 0; order < max_order_; order++) {
-    if (!current_node || current_node->character == -1) {
-      break;
-    }
-
     std::vector<int> prefix_vec;
     std::vector<int> prefix_steps;
 
-    if (is_utf8_mode_) {
-      new_node = current_node->get_prev_grapheme(prefix_vec, prefix_steps);
+    if (is_character_based_) {
+      new_node = current_node->get_path_vec(prefix_vec, prefix_steps, SPACE_ID_, 1);
+      current_node = new_node;
     } else {
-      new_node = current_node->get_prev_word(prefix_vec, prefix_steps, SPACE_ID_);
+      new_node = current_node->get_path_vec(prefix_vec, prefix_steps, SPACE_ID_);
+      current_node = new_node->parent;  // Skipping spaces
     }
-    current_node = new_node->parent;
 
     // reconstruct word
     std::string word = alphabet_.LabelsToString(prefix_vec);
     ngram.push_back(word);
+
+    if (new_node->character == -1) {
+      // No more spaces, but still need order
+      for (int i = 0; i < max_order_ - order - 1; i++) {
+        ngram.push_back(START_TOKEN);
+      }
+      break;
+    }
   }
   std::reverse(ngram.begin(), ngram.end());
   return ngram;
 }
 
-void Scorer::fill_dictionary(const std::vector<std::string>& vocabulary)
+void Scorer::fill_dictionary(const std::vector<std::string>& vocabulary, bool add_space)
 {
   // ConstFst is immutable, so we need to use a MutableFst to create the trie,
   // and then we convert to a ConstFst for the decoder and for storing on disk.
   fst::StdVectorFst dictionary;
   // For each unigram convert to ints and put in trie
   for (const auto& word : vocabulary) {
-    if (word != START_TOKEN && word != UNK_TOKEN && word != END_TOKEN) {
-      add_word_to_dictionary(word, char_map_, is_utf8_mode_, SPACE_ID_ + 1, &dictionary);
-    }
+    add_word_to_dictionary(word, char_map_, add_space, SPACE_ID_ + 1, &dictionary);
   }
 
   /* Simplify FST

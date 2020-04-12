@@ -1,18 +1,13 @@
 # Main training requirements
-
 numpy == 1.15.4
 progressbar2
 pandas
 six
 pyxdg
 attrdict
-absl-py
 
 # Requirements for building native_client files
 setuptools
-
-# Requirements for transcribe.py
-webrtcvad
 
 # Requirements for importers
 sox

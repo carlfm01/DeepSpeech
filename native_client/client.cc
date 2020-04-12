@@ -33,6 +33,12 @@
 #include "deepspeech.h"
 #include "args.h"
 
+#define N_CEP 26
+#define N_CONTEXT 9
+#define BEAM_WIDTH 500
+#define LM_ALPHA 0.75f
+#define LM_BETA 1.85f
+
 typedef struct {
   const char* string;
   double cpu_time_overall;
@@ -50,23 +56,23 @@ char* JSONOutput(Metadata* metadata);
 
 ds_result
 LocalDsSTT(ModelState* aCtx, const short* aBuffer, size_t aBufferSize,
-           bool extended_output, bool json_output)
+           int aSampleRate, bool extended_output, bool json_output)
 {
   ds_result res = {0};
 
   clock_t ds_start_time = clock();
 
   if (extended_output) {
-    Metadata *metadata = DS_SpeechToTextWithMetadata(aCtx, aBuffer, aBufferSize);
+    Metadata *metadata = DS_SpeechToTextWithMetadata(aCtx, aBuffer, aBufferSize, aSampleRate);
     res.string = metadataToString(metadata);
     DS_FreeMetadata(metadata);
   } else if (json_output) {
-    Metadata *metadata = DS_SpeechToTextWithMetadata(aCtx, aBuffer, aBufferSize);
+    Metadata *metadata = DS_SpeechToTextWithMetadata(aCtx, aBuffer, aBufferSize, aSampleRate);
     res.string = JSONOutput(metadata);
     DS_FreeMetadata(metadata);
   } else if (stream_size > 0) {
     StreamingState* ctx;
-    int status = DS_CreateStream(aCtx, &ctx);
+    int status = DS_SetupStream(aCtx, 0, aSampleRate, &ctx);
     if (status != DS_ERR_OK) {
       res.string = strdup("");
       return res;
@@ -90,7 +96,7 @@ LocalDsSTT(ModelState* aCtx, const short* aBuffer, size_t aBufferSize,
     }
     res.string = DS_FinishStream(ctx);
   } else {
-    res.string = DS_SpeechToText(aCtx, aBuffer, aBufferSize);
+    res.string = DS_SpeechToText(aCtx, aBuffer, aBufferSize, aSampleRate);
   }
 
   clock_t ds_end_infer = clock();
@@ -104,10 +110,11 @@ LocalDsSTT(ModelState* aCtx, const short* aBuffer, size_t aBufferSize,
 typedef struct {
   char*  buffer;
   size_t buffer_size;
+  int    sample_rate;
 } ds_audio_buffer;
 
 ds_audio_buffer
-GetAudioBuffer(const char* path, int desired_sample_rate)
+GetAudioBuffer(const char* path)
 {
   ds_audio_buffer res = {0};
 
@@ -117,7 +124,7 @@ GetAudioBuffer(const char* path, int desired_sample_rate)
 
   // Resample/reformat the audio so we can pass it through the MFCC functions
   sox_signalinfo_t target_signal = {
-      static_cast<sox_rate_t>(desired_sample_rate), // Rate
+      16000, // Rate
       1, // Channels
       16, // Precision
       SOX_UNSPEC, // Length
@@ -154,10 +161,10 @@ GetAudioBuffer(const char* path, int desired_sample_rate)
 
   assert(output);
 
-  if ((int)input->signal.rate < desired_sample_rate) {
-    fprintf(stderr, "Warning: original sample rate (%d) is lower than %dkHz. "
-                    "Up-sampling might produce erratic speech recognition.\n",
-                    desired_sample_rate, (int)input->signal.rate);
+  res.sample_rate = (int)output->signal.rate;
+
+  if ((int)input->signal.rate < 16000) {
+    fprintf(stderr, "Warning: original sample rate (%d) is lower than 16kHz. Up-sampling might produce erratic speech recognition.\n", (int)input->signal.rate);
   }
 
   // Setup the effects chain to decode/resample
@@ -203,7 +210,7 @@ GetAudioBuffer(const char* path, int desired_sample_rate)
 #endif // NO_SOX
 
 #ifdef NO_SOX
-  // FIXME: Hack and support only mono 16-bits PCM with standard SoX header
+  // FIXME: Hack and support only 16kHz mono 16-bits PCM
   FILE* wave = fopen(path, "r");
 
   size_t rv;
@@ -222,12 +229,12 @@ GetAudioBuffer(const char* path, int desired_sample_rate)
 
   assert(audio_format == 1); // 1 is PCM
   assert(num_channels == 1); // MONO
-  assert(sample_rate == desired_sample_rate); // at desired sample rate
+  assert(sample_rate == 16000); // 16000 Hz
   assert(bits_per_sample == 16); // 16 bits per sample
 
   fprintf(stderr, "audio_format=%d\n", audio_format);
   fprintf(stderr, "num_channels=%d\n", num_channels);
-  fprintf(stderr, "sample_rate=%d (desired=%d)\n", sample_rate, desired_sample_rate);
+  fprintf(stderr, "sample_rate=%d\n", sample_rate);
   fprintf(stderr, "bits_per_sample=%d\n", bits_per_sample);
 
   fseek(wave, 40, SEEK_SET); rv = fread(&res.buffer_size, 4, 1, wave);
@@ -255,7 +262,7 @@ GetAudioBuffer(const char* path, int desired_sample_rate)
 void
 ProcessFile(ModelState* context, const char* path, bool show_times)
 {
-  ds_audio_buffer audio = GetAudioBuffer(path, DS_GetModelSampleRate(context));
+  ds_audio_buffer audio = GetAudioBuffer(path);
 
   // Pass audio to DeepSpeech
   // We take half of buffer_size because buffer is a char* while
@@ -263,6 +270,7 @@ ProcessFile(ModelState* context, const char* path, bool show_times)
   ds_result result = LocalDsSTT(context,
                                 (const short*)audio.buffer,
                                 audio.buffer_size / 2,
+                                audio.sample_rate,
                                 extended_metadata,
                                 json_output);
   free(audio.buffer);
@@ -344,7 +352,7 @@ JSONOutput(Metadata* metadata)
   std::vector<meta_word> words = WordsFromMetadata(metadata);
 
   std::ostringstream out_string;
-  out_string << R"({"metadata":{"confidence":)" << metadata->confidence << R"(},"words":[)";
+  out_string << R"({"metadata":{"confidence":)" << metadata->probability << R"(},"words":[)";
 
   for (int i = 0; i < words.size(); i++) {
     meta_word w = words[i];
@@ -369,7 +377,7 @@ main(int argc, char **argv)
 
   // Initialise DeepSpeech
   ModelState* ctx;
-  int status = DS_CreateModel(model, beam_width, &ctx);
+  int status = DS_CreateModel(model, N_CEP, N_CONTEXT, alphabet, BEAM_WIDTH, &ctx);
   if (status != 0) {
     fprintf(stderr, "Could not create model.\n");
     return 1;
@@ -377,10 +385,11 @@ main(int argc, char **argv)
 
   if (lm && (trie || load_without_trie)) {
     int status = DS_EnableDecoderWithLM(ctx,
+                                        alphabet,
                                         lm,
                                         trie,
-                                        lm_alpha,
-                                        lm_beta);
+                                        LM_ALPHA,
+                                        LM_BETA);
     if (status != 0) {
       fprintf(stderr, "Could not enable CTC decoder with LM.\n");
       return 1;
@@ -440,7 +449,7 @@ main(int argc, char **argv)
   sox_quit();
 #endif // NO_SOX
 
-  DS_FreeModel(ctx);
+  DS_DestroyModel(ctx);
 
   return 0;
 }

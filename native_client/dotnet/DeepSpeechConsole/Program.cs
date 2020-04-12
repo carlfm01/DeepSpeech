@@ -26,7 +26,7 @@ namespace CSharpExamples
             var nl = Environment.NewLine;
             string retval =
              Environment.NewLine + $"Recognized text: {string.Join("", meta?.Items?.Select(x => x.Character))} {nl}"
-             + $"Confidence: {meta?.Confidence} {nl}"
+             + $"Prob: {meta?.Probability} {nl}"
              + $"Item count: {meta?.Items?.Length} {nl}"
              + string.Join(nl, meta?.Items?.Select(x => $"Timestep : {x.Timestep} TimeOffset: {x.StartTime} Char: {x.Character}"));
             return retval;
@@ -35,6 +35,7 @@ namespace CSharpExamples
         static void Main(string[] args)
         {
             string model = null;
+            string alphabet = null;
             string lm = null;
             string trie = null;
             string audio = null;
@@ -42,12 +43,15 @@ namespace CSharpExamples
             if (args.Length > 0)
             {
                 model = GetArgument(args, "--model");
+                alphabet = GetArgument(args, "--alphabet");
                 lm = GetArgument(args, "--lm");
                 trie = GetArgument(args, "--trie");
                 audio = GetArgument(args, "--audio");
                 extended = !string.IsNullOrWhiteSpace(GetArgument(args, "--extended"));
             }
 
+            const uint N_CEP = 26;
+            const uint N_CONTEXT = 9;
             const uint BEAM_WIDTH = 500;
             const float LM_ALPHA = 0.75f;
             const float LM_BETA = 1.85f;
@@ -62,6 +66,8 @@ namespace CSharpExamples
                     stopwatch.Start();
                     sttClient.CreateModel(
                         model ?? "output_graph.pbmm",
+                        N_CEP, N_CONTEXT,
+                        alphabet ?? "alphabet.txt",
                         BEAM_WIDTH);
                     stopwatch.Stop();
 
@@ -71,6 +77,7 @@ namespace CSharpExamples
                     {
                         Console.WriteLine("Loadin LM...");
                         sttClient.EnableDecoderWithLM(
+                            alphabet ?? "alphabet.txt",
                             lm ?? "lm.binary",
                             trie ?? "trie",
                             LM_ALPHA, LM_BETA);
@@ -88,12 +95,12 @@ namespace CSharpExamples
                         string speechResult;
                         if (extended)
                         {
-                            Metadata metaResult = sttClient.SpeechToTextWithMetadata(waveBuffer.ShortBuffer, Convert.ToUInt32(waveBuffer.MaxSize / 2));
+                            Metadata metaResult = sttClient.SpeechToTextWithMetadata(waveBuffer.ShortBuffer, Convert.ToUInt32(waveBuffer.MaxSize / 2), 16000);
                             speechResult = MetadataToString(metaResult);
                         }
                         else
                         {
-                            speechResult = sttClient.SpeechToText(waveBuffer.ShortBuffer, Convert.ToUInt32(waveBuffer.MaxSize / 2));
+                            speechResult = sttClient.SpeechToText(waveBuffer.ShortBuffer, Convert.ToUInt32(waveBuffer.MaxSize / 2), 16000);
                         }
 
                         stopwatch.Stop();

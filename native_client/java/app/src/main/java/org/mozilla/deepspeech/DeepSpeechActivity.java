@@ -23,6 +23,7 @@ public class DeepSpeechActivity extends AppCompatActivity {
     DeepSpeechModel _m = null;
 
     EditText _tfliteModel;
+    EditText _alphabet;
     EditText _audioFile;
 
     TextView _decodedString;
@@ -30,6 +31,8 @@ public class DeepSpeechActivity extends AppCompatActivity {
 
     Button _startInference;
 
+    final int N_CEP = 26;
+    final int N_CONTEXT = 9;
     final int BEAM_WIDTH = 50;
     final float LM_ALPHA = 0.75f;
     final float LM_BETA = 1.85f;
@@ -48,10 +51,10 @@ public class DeepSpeechActivity extends AppCompatActivity {
         return (int)((b1 & 0xFF) | (b2 & 0xFF) << 8 | (b3 & 0xFF) << 16 | (b4 & 0xFF) << 24);
     }
 
-    private void newModel(String tfliteModel) {
+    private void newModel(String tfliteModel, String alphabet) {
         this._tfliteStatus.setText("Creating model");
         if (this._m == null) {
-            this._m = new DeepSpeechModel(tfliteModel, BEAM_WIDTH);
+            this._m = new DeepSpeechModel(tfliteModel, N_CEP, N_CONTEXT, alphabet, BEAM_WIDTH);
         }
     }
 
@@ -60,7 +63,7 @@ public class DeepSpeechActivity extends AppCompatActivity {
 
         this._startInference.setEnabled(false);
 
-        this.newModel(this._tfliteModel.getText().toString());
+        this.newModel(this._tfliteModel.getText().toString(), this._alphabet.getText().toString());
 
         this._tfliteStatus.setText("Extracting audio features ...");
 
@@ -76,7 +79,7 @@ public class DeepSpeechActivity extends AppCompatActivity {
             // tv_numChannels.setText("numChannels=" + (numChannels == 1 ? "MONO" : "!MONO"));
 
             wave.seek(24); int sampleRate = this.readLEInt(wave);
-            assert (sampleRate == this._m.sampleRate()); // desired sample rate
+            assert (sampleRate == 16000); // 16000 Hz
             // tv_sampleRate.setText("sampleRate=" + (sampleRate == 16000 ? "16kHz" : "!16kHz"));
 
             wave.seek(34); char bitsPerSample = this.readLEChar(wave);
@@ -99,7 +102,7 @@ public class DeepSpeechActivity extends AppCompatActivity {
 
             long inferenceStartTime = System.currentTimeMillis();
 
-            String decoded = this._m.stt(shorts, shorts.length);
+            String decoded = this._m.stt(shorts, shorts.length, sampleRate);
 
             inferenceExecTime = System.currentTimeMillis() - inferenceStartTime;
 
@@ -127,11 +130,13 @@ public class DeepSpeechActivity extends AppCompatActivity {
         this._tfliteStatus = (TextView) findViewById(R.id.tfliteStatus);
 
         this._tfliteModel   = (EditText) findViewById(R.id.tfliteModel);
+        this._alphabet      = (EditText) findViewById(R.id.alphabet);
         this._audioFile     = (EditText) findViewById(R.id.audioFile);
 
         this._tfliteModel.setText("/sdcard/deepspeech/output_graph.tflite");
         this._tfliteStatus.setText("Ready, waiting ...");
 
+        this._alphabet.setText("/sdcard/deepspeech/alphabet.txt");
         this._audioFile.setText("/sdcard/deepspeech/audio.wav");
 
         this._startInference = (Button) findViewById(R.id.btnStartInference);
@@ -162,7 +167,7 @@ public class DeepSpeechActivity extends AppCompatActivity {
         super.onDestroy();
 
         if (this._m != null) {
-            this._m.freeModel();
+            this._m.destroyModel();
         }
     }
 }

@@ -1,17 +1,16 @@
 from __future__ import absolute_import, division, print_function
 
 import codecs
-import numpy as np
 import re
-import struct
 
-from util.flags import FLAGS
+import numpy as np
+
 from six.moves import range
 
 class Alphabet(object):
     def __init__(self, config_file):
         self._config_file = config_file
-        self._label_to_str = {}
+        self._label_to_str = []
         self._str_to_label = {}
         self._size = 0
         with codecs.open(config_file, 'r', 'utf-8') as fin:
@@ -23,46 +22,19 @@ class Alphabet(object):
     def string_from_label(self, label):
         return self._label_to_str[label]
 
-    def _label_from_string(self, string):
+    def label_from_string(self, string):
         try:
             return self._str_to_label[string]
         except KeyError as e:
             raise KeyError(
-                'ERROR: Your transcripts contain characters (e.g. \'{}\') which do not occur in data/alphabet.txt! Use ' \
-                'util/check_characters.py to see what characters are in your [train,dev,test].csv transcripts, and ' \
-                'then add all these to data/alphabet.txt.'.format(string)
+                '''ERROR: Your transcripts contain characters which do not occur in data/alphabet.txt! Use util/check_characters.py to see what characters are in your {train,dev,test}.csv transcripts, and then add all these to data/alphabet.txt.'''
             ).with_traceback(e.__traceback__)
-
-    def has_char(self, char):
-        return char in self._str_to_label
-
-    def encode(self, string):
-        res = []
-        for char in string:
-            res.append(self._label_from_string(char))
-        return res
 
     def decode(self, labels):
         res = ''
         for label in labels:
-            res += self._string_from_label(label)
+            res += self.string_from_label(label)
         return res
-
-    def serialize(self):
-        # Serialization format is a sequence of (key, value) pairs, where key is
-        # a uint16_t and value is a uint16_t length followed by `length` UTF-8
-        # encoded bytes with the label.
-        res = bytearray()
-
-        # We start by writing the number of pairs in the buffer as uint16_t.
-        res += struct.pack('<H', self._size)
-        for key, value in self._label_to_str.items():
-            value = value.encode('utf-8')
-            # struct.pack only takes fixed length strings/buffers, so we have to
-            # construct the correct format string with the length of the encoded
-            # label.
-            res += struct.pack('<HH{}s'.format(len(value)), key, len(value), value)
-        return bytes(res)
 
     def size(self):
         return self._size
@@ -71,64 +43,12 @@ class Alphabet(object):
         return self._config_file
 
 
-class UTF8Alphabet(object):
-    @staticmethod
-    def _string_from_label(_):
-        assert False
-
-    @staticmethod
-    def _label_from_string(_):
-        assert False
-
-    @staticmethod
-    def encode(string):
-        # 0 never happens in the data, so we can shift values by one, use 255 for
-        # the CTC blank, and keep the alphabet size = 256
-        return np.frombuffer(string.encode('utf-8'), np.uint8).astype(np.int32) - 1
-
-    @staticmethod
-    def decode(labels):
-        # And here we need to shift back up
-        return bytes(np.asarray(labels, np.uint8) + 1).decode('utf-8', errors='replace')
-
-    @staticmethod
-    def size():
-        return 255
-
-    @staticmethod
-    def serialize():
-        res = bytearray()
-        res += struct.pack('<h', 255)
-        for i in range(255):
-            # Note that we also shift back up in the mapping constructed here
-            # so that the native client sees the correct byte values when decoding.
-            res += struct.pack('<hh1s', i, 1, bytes([i+1]))
-        return bytes(res)
-
-    @staticmethod
-    def deserialize(buf):
-        size = struct.unpack('<I', buf)[0]
-        assert size == 255
-        return UTF8Alphabet()
-
-    @staticmethod
-    def config_file():
-        return ''
-
-
-def text_to_char_array(series, alphabet):
+def text_to_char_array(original, alphabet):
     r"""
-    Given a Pandas Series containing transcript string, map characters to
-    integers and return a numpy array representing the processed string.
+    Given a Python string ``original``, remove unsupported characters, map characters
+    to integers and return a numpy array representing the processed string.
     """
-    try:
-        transcript = np.asarray(alphabet.encode(series['transcript']))
-        if len(transcript) == 0:
-            raise ValueError('While processing: {}\nFound an empty transcript! You must include a transcript for all training data.'.format(series['wav_filename']))
-        return transcript
-    except KeyError as e:
-        # Provide the row context (especially wav_filename) for alphabet errors
-        raise ValueError('While processing: {}\n{}'.format(series['wav_filename'], e))
+    return np.asarray([alphabet.label_from_string(c) for c in original])
 
 
 # The following code is from: http://hetland.org/coding/python/levenshtein.py
@@ -168,15 +88,11 @@ def validate_label(label):
     if re.search(r"[0-9]|[(<\[\]&*{]", label) is not None:
         return None
 
-    label = label.replace("-", " ")
-    label = label.replace("_", " ")
-    label = re.sub("[ ]{2,}", " ", label)
+    label = label.replace("-", "")
+    label = label.replace("_", "")
     label = label.replace(".", "")
     label = label.replace(",", "")
-    label = label.replace(";", "")
     label = label.replace("?", "")
-    label = label.replace("!", "")
-    label = label.replace(":", "")
     label = label.replace("\"", "")
     label = label.strip()
     label = label.lower()

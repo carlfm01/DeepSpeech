@@ -6,9 +6,9 @@
     public class Metadata
     {
         /// <summary>
-        /// Approximated confidence value for this transcription.
+        /// Approximated probability (confidence value) for this transcription.
         /// </summary>
-        public double Confidence { get; set; }
+        public double Probability { get; set; }
         /// <summary>
         /// List of metada items containing char, timespet, and time offset.
         /// </summary>

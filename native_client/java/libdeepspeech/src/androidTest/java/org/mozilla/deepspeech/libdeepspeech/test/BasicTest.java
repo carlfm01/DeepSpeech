@@ -30,10 +30,13 @@ import java.nio.ByteBuffer;
 public class BasicTest {
 
     public static final String modelFile    = "/data/local/tmp/test/output_graph.tflite";
+    public static final String alphabetFile = "/data/local/tmp/test/alphabet.txt";
     public static final String lmFile       = "/data/local/tmp/test/lm.binary";
     public static final String trieFile     = "/data/local/tmp/test/trie";
     public static final String wavFile      = "/data/local/tmp/test/LDC93S1.wav";
 
+    public static final int N_CEP      = 26;
+    public static final int N_CONTEXT  = 9;
     public static final int BEAM_WIDTH = 50;
 
     public static final float LM_ALPHA = 0.75f;
@@ -63,8 +66,8 @@ public class BasicTest {
 
     @Test
     public void loadDeepSpeech_basic() {
-        DeepSpeechModel m = new DeepSpeechModel(modelFile, BEAM_WIDTH);
-        m.freeModel();
+        DeepSpeechModel m = new DeepSpeechModel(modelFile, N_CEP, N_CONTEXT, alphabetFile, BEAM_WIDTH);
+        m.destroyModel();
     }
 
     private String metadataToString(Metadata m) {
@@ -103,9 +106,9 @@ public class BasicTest {
             ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(shorts);
 
             if (extendedMetadata) {
-                return metadataToString(m.sttWithMetadata(shorts, shorts.length));
+                return metadataToString(m.sttWithMetadata(shorts, shorts.length, sampleRate));
             } else {
-                return m.stt(shorts, shorts.length);
+                return m.stt(shorts, shorts.length, sampleRate);
             }
         } catch (FileNotFoundException ex) {
 
@@ -120,39 +123,39 @@ public class BasicTest {
 
     @Test
     public void loadDeepSpeech_stt_noLM() {
-        DeepSpeechModel m = new DeepSpeechModel(modelFile, BEAM_WIDTH);
+        DeepSpeechModel m = new DeepSpeechModel(modelFile, N_CEP, N_CONTEXT, alphabetFile, BEAM_WIDTH);
 
         String decoded = doSTT(m, false);
         assertEquals("she had your dark suit in greasy wash water all year", decoded);
-        m.freeModel();
+        m.destroyModel();
     }
 
     @Test
     public void loadDeepSpeech_stt_withLM() {
-        DeepSpeechModel m = new DeepSpeechModel(modelFile, BEAM_WIDTH);
-        m.enableDecoderWihLM(lmFile, trieFile, LM_ALPHA, LM_BETA);
+        DeepSpeechModel m = new DeepSpeechModel(modelFile, N_CEP, N_CONTEXT, alphabetFile, BEAM_WIDTH);
+        m.enableDecoderWihLM(alphabetFile, lmFile, trieFile, LM_ALPHA, LM_BETA);
 
         String decoded = doSTT(m, false);
         assertEquals("she had your dark suit in greasy wash water all year", decoded);
-        m.freeModel();
+        m.destroyModel();
     }
 
     @Test
     public void loadDeepSpeech_sttWithMetadata_noLM() {
-        DeepSpeechModel m = new DeepSpeechModel(modelFile, BEAM_WIDTH);
+        DeepSpeechModel m = new DeepSpeechModel(modelFile, N_CEP, N_CONTEXT, alphabetFile, BEAM_WIDTH);
 
         String decoded = doSTT(m, true);
         assertEquals("she had your dark suit in greasy wash water all year", decoded);
-        m.freeModel();
+        m.destroyModel();
     }
 
     @Test
     public void loadDeepSpeech_sttWithMetadata_withLM() {
-        DeepSpeechModel m = new DeepSpeechModel(modelFile, BEAM_WIDTH);
-        m.enableDecoderWihLM(lmFile, trieFile, LM_ALPHA, LM_BETA);
+        DeepSpeechModel m = new DeepSpeechModel(modelFile, N_CEP, N_CONTEXT, alphabetFile, BEAM_WIDTH);
+        m.enableDecoderWihLM(alphabetFile, lmFile, trieFile, LM_ALPHA, LM_BETA);
 
         String decoded = doSTT(m, true);
         assertEquals("she had your dark suit in greasy wash water all year", decoded);
-        m.freeModel();
+        m.destroyModel();
     }
 }

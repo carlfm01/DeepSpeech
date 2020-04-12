@@ -7,11 +7,9 @@ import json
 
 from multiprocessing import cpu_count
 
-import absl.app
 import numpy as np
 import progressbar
 import tensorflow as tf
-import tensorflow.compat.v1 as tfv1
 
 from ds_ctcdecoder import ctc_beam_search_decoder_batch, Scorer
 from six.moves import zip
@@ -34,45 +32,41 @@ def sparse_tensor_value_to_texts(value, alphabet):
 def sparse_tuple_to_texts(sp_tuple, alphabet):
     indices = sp_tuple[0]
     values = sp_tuple[1]
-    results = [[] for _ in range(sp_tuple[2][0])]
+    results = [''] * sp_tuple[2][0]
     for i, index in enumerate(indices):
-        results[index[0]].append(values[i])
+        results[index[0]] += alphabet.string_from_label(values[i])
     # List of strings
-    return [alphabet.decode(res) for res in results]
+    return results
 
 
-def evaluate(test_csvs, create_model, try_loading, noise_sources=None, speech_sources=None):
-    if FLAGS.lm_binary_path:
-        scorer = Scorer(FLAGS.lm_alpha, FLAGS.lm_beta,
-                        FLAGS.lm_binary_path, FLAGS.lm_trie_path,
-                        Config.alphabet)
-    else:
-        scorer = None
+def evaluate(test_csvs, create_model, try_loading):
+    scorer = Scorer(FLAGS.lm_alpha, FLAGS.lm_beta,
+                    FLAGS.lm_binary_path, FLAGS.lm_trie_path,
+                    Config.alphabet)
 
     test_csvs = FLAGS.test_files.split(',')
-    test_sets = [create_dataset([csv], batch_size=FLAGS.test_batch_size, train_phase=False, noise_sources=noise_sources, speech_sources=speech_sources) for csv in test_csvs]
-    iterator = tfv1.data.Iterator.from_structure(tfv1.data.get_output_types(test_sets[0]),
-                                                 tfv1.data.get_output_shapes(test_sets[0]),
-                                                 output_classes=tfv1.data.get_output_classes(test_sets[0]))
+    test_sets = [create_dataset([csv], batch_size=FLAGS.test_batch_size) for csv in test_csvs]
+    iterator = tf.data.Iterator.from_structure(test_sets[0].output_types,
+                                               test_sets[0].output_shapes,
+                                               output_classes=test_sets[0].output_classes)
     test_init_ops = [iterator.make_initializer(test_set) for test_set in test_sets]
 
-    batch_wav_filename, (batch_x, batch_x_len), batch_y, _ = iterator.get_next()
+    (batch_x, batch_x_len), batch_y = iterator.get_next()
 
     # One rate per layer
     no_dropout = [None] * 6
     logits, _ = create_model(batch_x=batch_x,
-                             batch_size=FLAGS.test_batch_size,
                              seq_length=batch_x_len,
                              dropout=no_dropout)
 
     # Transpose to batch major and apply softmax for decoder
-    transposed = tf.nn.softmax(tf.transpose(a=logits, perm=[1, 0, 2]))
+    transposed = tf.nn.softmax(tf.transpose(logits, [1, 0, 2]))
 
-    loss = tfv1.nn.ctc_loss(labels=batch_y,
+    loss = tf.nn.ctc_loss(labels=batch_y,
                           inputs=logits,
                           sequence_length=batch_x_len)
 
-    tfv1.train.get_or_create_global_step()
+    tf.train.get_or_create_global_step()
 
     # Get number of accessible CPU cores for this process
     try:
@@ -81,21 +75,18 @@ def evaluate(test_csvs, create_model, try_loading, noise_sources=None, speech_so
         num_processes = 1
 
     # Create a saver using variables from the above newly created graph
-    saver = tfv1.train.Saver()
+    saver = tf.train.Saver()
 
-    with tfv1.Session(config=Config.session_config) as session:
+    with tf.Session(config=Config.session_config) as session:
         # Restore variables from training checkpoint
-        loaded = False
-        if not loaded and FLAGS.load in ['auto', 'best']:
-            loaded = try_loading(session, saver, 'best_dev_checkpoint', 'best validation')
-        if not loaded and FLAGS.load in ['auto', 'last']:
+        loaded = try_loading(session, saver, 'best_dev_checkpoint', 'best validation')
+        if not loaded:
             loaded = try_loading(session, saver, 'checkpoint', 'most recent')
         if not loaded:
-            print('Could not load checkpoint from {}'.format(FLAGS.checkpoint_dir))
-            sys.exit(1)
+            log_error('Checkpoint directory ({}) does not contain a valid checkpoint state.'.format(FLAGS.checkpoint_dir))
+            exit(1)
 
         def run_test(init_op, dataset):
-            wav_filenames = []
             losses = []
             predictions = []
             ground_truths = []
@@ -112,17 +103,15 @@ def evaluate(test_csvs, create_model, try_loading, noise_sources=None, speech_so
             # First pass, compute losses and transposed logits for decoding
             while True:
                 try:
-                    batch_wav_filenames, batch_logits, batch_loss, batch_lengths, batch_transcripts = \
-                        session.run([batch_wav_filename, transposed, loss, batch_x_len, batch_y])
+                    batch_logits, batch_loss, batch_lengths, batch_transcripts = \
+                        session.run([transposed, loss, batch_x_len, batch_y])
                 except tf.errors.OutOfRangeError:
                     break
 
                 decoded = ctc_beam_search_decoder_batch(batch_logits, batch_lengths, Config.alphabet, FLAGS.beam_width,
-                                                        num_processes=num_processes, scorer=scorer,
-                                                        cutoff_prob=FLAGS.cutoff_prob, cutoff_top_n=FLAGS.cutoff_top_n)
+                                                        num_processes=num_processes, scorer=scorer)
                 predictions.extend(d[0][1] for d in decoded)
                 ground_truths.extend(sparse_tensor_value_to_texts(batch_transcripts, Config.alphabet))
-                wav_filenames.extend(wav_filename.decode('UTF-8') for wav_filename in batch_wav_filenames)
                 losses.extend(batch_loss)
 
                 step_count += 1
@@ -130,7 +119,7 @@ def evaluate(test_csvs, create_model, try_loading, noise_sources=None, speech_so
 
             bar.finish()
 
-            wer, cer, samples = calculate_report(wav_filenames, ground_truths, predictions, losses)
+            wer, cer, samples = calculate_report(ground_truths, predictions, losses)
             mean_loss = np.mean(losses)
 
             # Take only the first report_count items
@@ -142,7 +131,6 @@ def evaluate(test_csvs, create_model, try_loading, noise_sources=None, speech_so
             for sample in report_samples:
                 print('WER: %f, CER: %f, loss: %f' %
                       (sample.wer, sample.cer, sample.loss))
-                print(' - wav: file://%s' % sample.wav_filename)
                 print(' - src: "%s"' % sample.src)
                 print(' - res: "%s"' % sample.res)
                 print('-' * 80)
@@ -162,7 +150,7 @@ def main(_):
     if not FLAGS.test_files:
         log_error('You need to specify what files to use for evaluation via '
                   'the --test_files flag.')
-        sys.exit(1)
+        exit(1)
 
     from DeepSpeech import create_model, try_loading # pylint: disable=cyclic-import
     samples = evaluate(FLAGS.test_files.split(','), create_model, try_loading)
@@ -174,4 +162,5 @@ def main(_):
 
 if __name__ == '__main__':
     create_flags()
-    absl.app.run(main)
+    tf.app.flags.DEFINE_string('test_output_file', '', 'path to a file to save all src/decoded/distance/loss tuples')
+    tf.app.run(main)

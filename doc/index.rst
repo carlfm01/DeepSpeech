@@ -8,60 +8,42 @@ Welcome to DeepSpeech's documentation!
 
 .. toctree::
    :maxdepth: 2
-   :caption: Introduction
+   :caption: Contents:
 
    DeepSpeech
-
-.. toctree::
-   :maxdepth: 2
-   :caption: DeepSpeech Model
-
    Geometry
    ParallelOptimization
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Enums and structs
+.. automodule:: DeepSpeech
+   :members:
 
-   Error-Codes
+.. automodule:: util.audio
+   :members:
 
-   Structs
+.. automodule:: util.text
+   :members:
 
-.. toctree::
-   :maxdepth: 2
-   :caption: API Reference
+.. automodule:: util.gpu
+   :members:
 
-   C-API
+.. automodule:: util.stm
+   :members:
 
-   DotNet-API
+.. automodule:: util.importers.ldc93s1
+   :members:
 
-   Java-API
+.. automodule:: util.importers.ted
+   :members:
 
-   NodeJS-API
+.. automodule:: util.importers.librivox
+   :members:
 
-   Python-API
+.. automodule:: util.importers.LDC97S62
+   :members:
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Examples
+.. automodule:: util.importers.fisher
+   :members:
 
-   C-Examples
-
-   NodeJS-Examples
-
-   Java-Examples
-
-   Python-Examples
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Contributed examples
-
-   DotNet-contrib-examples.rst
-
-   NodeJS-contrib-Examples
-
-   Python-contrib-Examples
 
 Indices and tables
 ==================
